@@ -95,6 +95,11 @@ void testRegisteredTsf() {
         Document document(thread.Get(), client);
         document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "Set focus");
+        pump();
+        BOOL threadFocused = FALSE;
+        check(thread->IsThreadFocus(&threadFocused), "thread input focus");
+        check(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active), "focused keyboard profile");
+        std::cout << "TEST: focused thread=" << threadFocused << " active profile match=" << (active.clsid == ServiceId) << std::endl;
         type(keys.Get(), document.context.Get(), "dkssud");
         require(document.store->text == L"안녕", "TSF Hangul composition");
         require(document.store->compositions == 1, "one live composition");
@@ -254,8 +259,10 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
         testCoreAndKeys();
-        testCompositionContext();
+        // NOACTIVATETIP belongs only to the unregistered context test. Keep it
+        // out of the process that asks Windows to activate a registered TIP.
         if (argc == 2 && std::wstring(argv[1]) == L"--registered") testRegisteredTsf();
+        else testCompositionContext();
         factory.Reset();
         CoUninitialize();
         require(moduleObjects == 0, "all test documents and queued edit sessions must be released");
