@@ -33,9 +33,22 @@ description = "서명된 로컬 입력기와 타이핑 테스트 앱 빌드"
 run = "node scripts/build-macos.mjs"
 
 [tasks."macos:install"]
-description = "현재 사용자의 입력기로 Amu 설치·등록"
+description = "Amu 빌드·백업·설치·안전한 재시작·실행 버전 확인 (다른 입력기로 전환 후 실행)"
 depends = ["macos:build"]
 run = "node scripts/install-macos.mjs"
+
+[tasks."macos:version"]
+description = "실행 중인 Amu의 버전·커밋·PID 확인"
+run = 'dist/amu-input-source running "$HOME/Library/Input Methods/Amu.app"'
+
+[tasks."macos:package"]
+description = "macOS 앱을 빌드하고 Release ZIP·체크섬 생성"
+depends = ["macos:build"]
+run = "node scripts/package-macos.mjs"
+
+[tasks."scripts:test"]
+description = "설치 실패·복구·동시 실행 경계 검사"
+run = "node --test scripts/tests/*.test.mjs"
 
 [tasks."macos:play"]
 description = "설치 없이 타이핑 테스트 창 열기"

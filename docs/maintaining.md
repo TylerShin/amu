@@ -65,7 +65,7 @@ README의 CI 배지는 첫 실행 결과를 반영한다. GitHub Actions에서 *
 
 ## 의존성과 CI 유지보수
 
-GitHub Actions는 전체 커밋 SHA에 고정하고 Dependabot이 갱신 PR을 연다. 작업 권한은 `contents: read`이며 외부 PR에 비밀정보를 전달하는 `pull_request_target` 흐름을 사용하지 않는다.
+GitHub Actions는 전체 커밋 SHA에 고정하고 Dependabot이 갱신 PR을 연다. 검증 작업 권한은 `contents: read`이며 Release 공개 작업에만 `contents: write`를 부여한다. 외부 PR에 비밀정보를 전달하는 `pull_request_target` 흐름을 사용하지 않는다.
 
 Rust·Node.js·actionlint·gitleaks는 `mise.toml`, mise 자체는 CI 설정에 고정한다. Cargo·Actions 이외의 버전은 유지보수자가 변경 PR로 올린다. libhangul·모델 변경에는 원본 리비전, 라이선스, SHA-256, 재현 결과를 함께 갱신한다. CI의 도구 설치가 사용하는 네트워크와 제품의 로컬 입력 경로는 별개다.
 
@@ -75,14 +75,32 @@ CI의 mise 캐시는 비활성화한다. 현재 Rust 백엔드의 실제 toolcha
 
 ## 릴리스
 
-현재는 소스 빌드만 제공하는 실험 버전이다. 자동으로 태그를 만들거나 공증되지 않은 앱을 안정 버전으로 배포하지 않는다.
+main에 push하면 같은 CI 실행에서 Linux·macOS 검사 → macOS ZIP 패키징 → GitHub 개발 릴리스 공개를 수행한다. `workflow_dispatch`로 main에서 재시도할 수도 있다. PR·fork·다른 브랜치는 공개하지 않는다.
 
-1. `CHANGELOG.md`의 미출시 항목을 실제 버전과 날짜로 정리한다.
-2. `Cargo.toml`·`Cargo.lock`과 macOS 빌드 스크립트의 번들 버전·ABOUT 문구를 함께 갱신한다.
-3. 대상 커밋의 CI와 지원 앱별 수동 검사 결과를 확인한다. 지원 CPU·OS와 남은 제약을 명시한다.
-4. 앱 안에 Amu MIT, libhangul 소스·라이선스·교체 안내, 모델 출처·라이선스·재생성 자료가 포함됐는지 검사한다.
-5. 배포 방식에 맞게 서명·공증을 검증한 뒤 태그와 GitHub Release를 만든다. 현재 개발 번들은 ad-hoc 서명이다.
-6. 한국어 릴리스 설명에 달라진 동작, 설치·업데이트·제거 방법, 검증 환경, SHA-256을 기록한다. `.github/release.yml`의 자동 분류 결과는 초안으로 사용한다.
+- `verify` 행렬의 모든 검사가 성공해야 `release` 작업이 시작된다. 패키지는 macOS 검사에서 만든 번들을 그대로 사용하며 공개 작업에서 다시 빌드하지 않는다.
+- 태그는 `v0.1.0-dev.<Actions 실행 번호>.<커밋 앞 12자리>` 형식이다. 태그 대상은 이동하는 main 대신 검사한 전체 커밋 SHA로 고정한다.
+- 현재 공개 CPU는 `macos-26` runner의 Apple Silicon이다. 압축 전후 서명, 실행 파일의 CPU, 버전, 필수 라이선스 자료와 SHA-256을 검사한다.
+- Release에는 앱 ZIP, `SHA256SUMS`, `release.json`이 올라간다. 모든 파일을 draft에 올린 후 prerelease로 공개한다. 업로드 실패 시 draft로 남으며 같은 실행을 재시도하면 이어서 공개한다. 이미 공개된 같은 태그는 덮어쓰지 않는다.
+- main의 연속 push는 서로 취소하지 않는다. PR은 새 커밋이 이전 검증을 취소한다. main 실행을 수동 취소하면 해당 실행의 공개는 완료되지 않을 수 있다.
+- 인증서·공증·별도 관리 앱·백그라운드 업데이트는 없다. 일반 다운로드 앱에 적용되는 Gatekeeper 제한과 수동 설치 절차는 [설치 안내](install-release.md)에 명시한다.
+
+앱 버전의 기준은 Cargo workspace 버전이다. 빌드 스크립트가 번들 정보·ABOUT·`build.json`·실행 파일 안의 버전 응답에 같은 값을 넣는다. 로컬 빌드는 커밋·dirty 상태·고유 빌드 ID를 포함한다. 릴리스 기본 버전을 올릴 때는 `Cargo.toml`·`Cargo.lock`과 변경 기록을 갱신한다.
+
+### 로컬 적용
+
+```sh
+mise run macos:install  # 빌드부터 실제 실행 버전 확인까지
+mise run macos:version  # 실행 중인 프로세스에 다시 확인
+mise run macos:package  # 로컬 ZIP을 dist/release에 생성
+```
+
+설치 전에 Amu에서 한국어 또는 ABC로 전환한다. 설치기는 staging 복사를 끝낸 뒤 지정 경로의 Amu만 정상 종료를 요청한다. 앱도 선택 상태·남은 조합을 검사해 종료를 거부할 수 있다. SIGKILL이나 다른 입력 앱 종료는 사용하지 않는다.
+
+동시 설치는 잠금으로 막는다. 설치·등록·시작·버전 확인이 실패하면 새 프로세스를 안전하게 종료할 수 있을 때 이전 파일로 복구하고 실패를 보고한다. 복구 중 입력기가 다시 사용되어 종료할 수 없다면 현재 앱과 백업을 모두 보존한다. 백업 경로는 오류에 표시한다. 정상 복구 후에도 적용 성공으로 보고하지 않으며 다른 입력기를 유지한 상태에서 명령을 다시 실행한다.
+
+비정상적인 전원 종료 등으로 `~/Library/Input Methods/.amu-install.lock`이 남으면 다른 설치가 실행 중이지 않은지 확인한 뒤 잠금 디렉터리를 제거한다. 자동으로 다른 설치의 잠금을 지우지 않는다.
+
+원격 push만으로 로컬 Mac에서 코드를 실행하지 않는다. 로컬 적용은 사용자가 위 명령을 실행할 때 수행한다. 실패 로그를 확인할 때는 CI의 head SHA가 공개하려는 커밋과 같은지 먼저 대조한다.
 
 ## 운영 도구 문서
 

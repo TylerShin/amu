@@ -6,6 +6,10 @@
 
 ### 추가
 
+- main의 Linux·macOS CI 성공 후 Apple Silicon 앱 ZIP·체크섬을 GitHub 개발 릴리스로 자동 공개.
+- `mise run macos:install`의 안전한 재시작·실행 버전 확인, 설치 실패 시 백업 복구와 동시 설치 방지.
+- `mise run macos:version`, `mise run macos:package`와 인증서 없는 Release 설치 안내.
+
 - Rust 공통 코어, libhangul 두벌식 조합·삭제, Swift C ABI.
 - macOS Playground와 InputMethodKit 입력기, 자동·한글·영문 모드.
 - 한글 조합·음절 통계, 영어 철자 특성과 최근 언어 경향을 이용한 혼합 판독.
@@ -14,6 +18,8 @@
 
 ### 수정
 
+- 쌍자음 뒤 모음까지 Shift를 누른 입력이 `벌TJ`, `아RK`로 나뉘던 오판독을 수정.
+- `ㅎㅎㅎ`, `ㅋㅋㅋ`, `ㅠㅠ` 같은 반복 자모를 영어로 판단하던 문제를 수정하고 삭제·확정을 검증.
 - Linux의 C11 빌드에서 libhangul이 사용하는 POSIX 함수 선언을 활성화해 공통 코어의 빌드 실패를 수정.
 - CI 재실행에서 Rust 도구 캐시 복원 후 rustfmt·clippy가 누락되는 문제를 수정.
 

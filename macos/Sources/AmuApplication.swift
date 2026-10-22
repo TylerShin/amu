@@ -5,10 +5,15 @@ import InputMethodKit
 @MainActor
 struct AmuApplication {
     static func main() {
+        if CommandLine.arguments.contains("--version") {
+            print(AmuBuild.json)
+            return
+        }
         let application = NSApplication.shared
         let isPlayground = Bundle.main.bundleIdentifier == "dev.amu.Playground"
         var playground: Playground?
         var inputServer: IMKServer?
+        var runtime: RuntimeStatus?
 
         if isPlayground {
             application.setActivationPolicy(.regular)
@@ -26,9 +31,10 @@ struct AmuApplication {
                 print("InputMethodKit server and AmuInputController registration: passed")
                 return
             }
+            runtime = RuntimeStatus()
         }
 
-        withExtendedLifetime((playground, inputServer)) { application.run() }
+        withExtendedLifetime((playground, inputServer, runtime)) { application.run() }
     }
 
     private static func installApplicationMenu(_ application: NSApplication) {

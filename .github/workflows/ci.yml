@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -37,6 +37,8 @@ jobs:
           cache: false
       - name: 공개 파일·문서·모델 검사
         run: mise run repo:check
+      - name: 설치 실패·복구 경계 검사
+        run: mise run scripts:test
       - name: 워크플로와 비밀정보 검사
         if: runner.os == 'Linux'
         run: |
@@ -47,3 +49,43 @@ jobs:
       - name: macOS 빌드·서명·AppKit 연결 검사
         if: runner.os == 'macOS'
         run: mise run macos:smoke
+      - name: 검사한 macOS 번들 패키징
+        if: runner.os == 'macOS'
+        # 다시 빌드하지 않고 위에서 검사한 번들을 압축한다.
+        run: mise exec -- node scripts/package-macos.mjs
+      - name: Release 패키지 보관
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-release
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: GitHub Release 공개
+    needs: verify
+    if: github.repository == 'TylerShin/amu' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: 검사한 커밋 받기
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: 고정 개발 도구 설치
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: "2025.12.9"
+          cache: false
+      - name: 같은 실행의 검사된 패키지 받기
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: macos-release
+          path: dist/release/
+      - name: 체크섬 확인 후 개발 릴리스 공개
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec -- node scripts/publish-release.mjs

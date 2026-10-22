@@ -62,6 +62,7 @@ mise run repo:check
 |---|---|
 | 한글 조합·판독·세션·C ABI | 의미 있는 회귀 사례와 `mise run core:evaluate` |
 | macOS 연결·빌드·번들 리소스 | `mise run macos:smoke`, 실제 입력 경로 수동 확인 |
+| 설치·패키징 스크립트 | `mise run scripts:test`, `mise run macos:package` |
 | GitHub Actions | `mise run workflow:check` |
 | 공개 파일·의존성·인증 관련 | `mise run secrets:check` |
 | 한국어 통계 | `mise run model:korean`, manifest·출처·평가 결과 확인 |

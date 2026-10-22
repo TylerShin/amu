@@ -4,6 +4,8 @@ import InputMethodKit
 @objc(AmuInputController)
 @MainActor
 final class AmuInputController: IMKInputController {
+    private static weak var activeController: AmuInputController?
+    static var hasMarkedText: Bool { !(activeController?.coordinator.markedText.isEmpty ?? true) }
     private let coordinator = InputCoordinator(mode: InputPreferences.loadMode())
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
@@ -17,6 +19,7 @@ final class AmuInputController: IMKInputController {
     }
 
     override func activateServer(_ sender: Any!) {
+        Self.activeController = self
         coordinator.reset()
         if let input = sender as? IMKTextInput {
             coordinator.changeMode(InputPreferences.loadMode(), client: InputMethodClient(input))
@@ -28,6 +31,7 @@ final class AmuInputController: IMKInputController {
         commitComposition(sender)
         coordinator.reset()
         super.deactivateServer(sender)
+        if Self.activeController === self { Self.activeController = nil }
     }
 
     override func recognizedEvents(_ sender: Any!) -> Int { Int(NSEvent.EventTypeMask.keyDown.rawValue) }
