@@ -31,23 +31,22 @@ function Register-Package([string]$Directory, [switch]$Remove) {
 }
 
 $script:temporary = Join-Path ([IO.Path]::GetTempPath()) ('amu-install-tests-' + [Guid]::NewGuid().ToString())
-$originalProgramFiles = $env:ProgramFiles
 $script:events = [Collections.Generic.List[object]]::new()
 $script:failNextRegistration = $false
 try {
     New-Item -ItemType Directory $script:temporary | Out-Null
-    $env:ProgramFiles = Join-Path $script:temporary 'programs'
+    $script:installRoot = Join-Path $script:temporary 'programs\Amu'
     $first = New-Package 'v0.1.0-local.first'
     $second = New-Package 'v0.1.0-local.second'
     $Action = 'Install'
-    Invoke-AmuInstaller $first | Out-Null
-    $statePath = Join-Path $env:ProgramFiles 'Amu\active.json'
+    Invoke-AmuInstaller $first -InstallRoot $script:installRoot | Out-Null
+    $statePath = Join-Path $script:installRoot 'active.json'
     $previous = Get-Content -Raw $statePath | ConvertFrom-Json
     Assert ($previous.identifier -eq 'v0.1.0-local.first') 'First install must be recorded'
     Assert (Test-Path (Join-Path $previous.directory 'payload.txt')) 'Installed payload must exist'
 
     $script:failNextRegistration = $true
-    Expect-Failure { Invoke-AmuInstaller $second }
+    Expect-Failure { Invoke-AmuInstaller $second -InstallRoot $script:installRoot }
     $state = Get-Content -Raw $statePath | ConvertFrom-Json
     Assert ($state.identifier -eq $previous.identifier) 'Failed update must retain the previous active version'
     Assert ($script:events[$script:events.Count - 1].directory -eq $previous.directory) 'Previous COM registration must be restored'
@@ -55,24 +54,23 @@ try {
 
     $before = $script:events.Count
     Set-Content (Join-Path $second 'payload.txt') 'tampered'
-    Expect-Failure { Invoke-AmuInstaller $second }
+    Expect-Failure { Invoke-AmuInstaller $second -InstallRoot $script:installRoot }
     Assert ($script:events.Count -eq $before) 'Tampered packages must not change registration'
 
-    $lock = [IO.File]::Open((Join-Path $env:ProgramFiles 'Amu\install.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
-    try { Expect-Failure { Invoke-AmuInstaller $first } } finally { $lock.Dispose() }
+    $lock = [IO.File]::Open((Join-Path $script:installRoot 'install.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+    try { Expect-Failure { Invoke-AmuInstaller $first -InstallRoot $script:installRoot } } finally { $lock.Dispose() }
     Assert ($script:events.Count -eq $before) 'Concurrent installs must not change registration'
 
     $Action = 'Uninstall'
     $script:failNextRegistration = $true
-    Expect-Failure { Invoke-AmuInstaller $first }
+    Expect-Failure { Invoke-AmuInstaller $first -InstallRoot $script:installRoot }
     Assert (Test-Path $statePath) 'Failed uninstall must retain recovery metadata'
     Assert ($script:events[$script:events.Count - 1].directory -eq $previous.directory) 'Failed uninstall must restore registration'
 
-    Invoke-AmuInstaller $first | Out-Null
+    Invoke-AmuInstaller $first -InstallRoot $script:installRoot | Out-Null
     Assert (-not (Test-Path $statePath)) 'Successful uninstall must remove active registration metadata'
     Assert (Test-Path (Join-Path $previous.directory 'payload.txt')) 'Uninstall must preserve DLLs for running hosts'
     Write-Output 'PASS: install, rollback, integrity rejection, concurrent install and uninstall recovery'
 } finally {
-    $env:ProgramFiles = $originalProgramFiles
     Remove-Item -Recurse -Force $script:temporary
 }

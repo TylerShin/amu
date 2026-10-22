@@ -109,8 +109,9 @@ HRESULT ContextSession::QueryInterface(REFIID iid, void** result) {
 }
 HRESULT ContextSession::OnCompositionTerminated(TfEditCookie, ITfComposition* composition) {
     if (composition_.matches(composition)) {
+        bool expected = composition_.ending();
         composition_.terminated();
-        if (!applying_) core_.reset();
+        if (!expected) core_.reset();
         ++revision_;
     }
     return S_OK;

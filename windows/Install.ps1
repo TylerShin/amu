@@ -5,12 +5,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')
 
-function Invoke-AmuInstaller([string]$PackageDirectory = $PSScriptRoot) {
+function Invoke-AmuInstaller([string]$PackageDirectory = $PSScriptRoot, [string]$InstallRoot = (Join-Path $env:ProgramFiles 'Amu')) {
     if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
         throw '이 패키지는 Windows 11 x64용입니다. ARM64는 아직 지원하지 않습니다.'
     }
-    $root = Join-Path $env:ProgramFiles 'Amu'
+    $root = $InstallRoot
     $statePath = Join-Path $root 'active.json'
     if ($Action -eq 'Status') {
         if (-not (Test-Path $statePath)) { throw '설치된 Amu가 없습니다.' }

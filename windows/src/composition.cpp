@@ -30,7 +30,9 @@ HRESULT Composition::finish(TfEditCookie cookie) {
     ComPtr<ITfProperty> property;
     if (SUCCEEDED(context->GetProperty(GUID_PROP_ATTRIBUTE, &property))) property->Clear(cookie, range.Get());
     auto composition = composition_;
+    ending_ = true;
     result = composition->EndComposition(cookie);
+    ending_ = false;
     if (SUCCEEDED(result)) terminated();
     return result;
 }
