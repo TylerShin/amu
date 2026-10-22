@@ -45,6 +45,7 @@ HRESULT TextStore::GetSelection(ULONG index, ULONG count, TS_SELECTION_ACP* sele
 HRESULT TextStore::SetSelection(ULONG count, const TS_SELECTION_ACP* selection) {
     if ((lock_ & TS_LF_READWRITE) != TS_LF_READWRITE) return TS_E_NOLOCK;
     if (count != 1) return E_INVALIDARG;
+    if (failNextSelection) { failNextSelection = false; return E_FAIL; }
     start = selection->acpStart; end = selection->acpEnd; return S_OK;
 }
 HRESULT TextStore::GetText(LONG first, LONG last, WCHAR* plain, ULONG capacity, ULONG* copied,
@@ -64,6 +65,7 @@ HRESULT TextStore::GetText(LONG first, LONG last, WCHAR* plain, ULONG capacity, 
 HRESULT TextStore::SetText(DWORD, LONG first, LONG last, const WCHAR* value, ULONG length, TS_TEXTCHANGE* change) {
     if ((lock_ & TS_LF_READWRITE) != TS_LF_READWRITE) return TS_E_NOLOCK;
     if (readOnly) return TS_E_READONLY;
+    if (failNextWrite) { failNextWrite = false; return E_FAIL; }
     if (first < 0 || last < first || last > static_cast<LONG>(text.size())) return TS_E_INVALIDPOS;
     text.replace(first, last - first, value ? value : L"", length);
     *change = {first, last, first + static_cast<LONG>(length)};

@@ -13,6 +13,8 @@ public:
     LONG end = 0;
     bool denyLock = false;
     bool readOnly = false;
+    bool failNextSelection = false;
+    bool failNextWrite = false;
     unsigned compositions = 0;
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void**) override;
     ULONG STDMETHODCALLTYPE AddRef() override { return retain(); }

@@ -79,23 +79,26 @@ void testRegisteredTsf() {
     check(thread->ActivateEx(&client, 0), "Activate TSF");
     ComPtr<ITfInputProcessorProfiles> languages;
     check(CoCreateInstance(CLSID_TF_InputProcessorProfiles, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&languages)), "language profiles");
-    check(languages->ChangeCurrentLanguage(LanguageId), "test process Korean input language");
     ComPtr<ITfInputProcessorProfileMgr> profiles;
     check(languages.As(&profiles), "profile manager");
-    auto activated = profiles->ActivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS);
-    check(activated, "activate installed Amu profile");
-    require(activated == S_OK, "installed Amu profile must be enabled");
-    pump();
     TF_INPUTPROCESSORPROFILE active{};
-    check(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active), "active keyboard profile");
-    require(active.clsid == ServiceId, "Windows must activate the installed Amu service");
+    auto activate = [&]() {
+        pump();
+        check(languages->ChangeCurrentLanguage(LanguageId), "test process Korean input language");
+        auto activated = profiles->ActivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS);
+        check(activated, "activate installed Amu profile");
+        require(activated == S_OK, "installed Amu profile must be enabled");
+        pump();
+        check(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active), "active keyboard profile");
+        require(active.clsid == ServiceId, "Windows must activate the installed Amu service");
+    };
     ComPtr<ITfKeystrokeMgr> keys;
     check(thread.As(&keys), "TSF keystroke manager");
     {
         Document document(thread.Get(), client);
         document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "Set focus");
-        pump();
+        activate();
         BOOL threadFocused = FALSE;
         check(thread->IsThreadFocus(&threadFocused), "thread input focus");
         check(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active), "focused keyboard profile");
@@ -120,7 +123,7 @@ void testRegisteredTsf() {
         Document other(thread.Get(), client);
         other.store->focusForTyping();
         check(thread->SetFocus(other.manager.Get()), "switch focus");
-        pump();
+        activate();
         require(document.store->text == L"안녕AI", "focus preserves previous document");
         require(document.store->compositions == 0, "focus finishes previous composition");
         type(keys.Get(), other.context.Get(), "fallback");
@@ -146,6 +149,7 @@ void testRegisteredTsf() {
         Document document(thread.Get(), client);
         document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "long input focus");
+        activate();
         require(keyDown(keys.Get(), document.context.Get(), VK_F3, true, true), "English mode shortcut");
         std::string letters(513, 'a');
         type(keys.Get(), document.context.Get(), letters.c_str());
@@ -158,6 +162,7 @@ void testRegisteredTsf() {
         Document document(thread.Get(), client);
         document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "mixed sentence focus");
+        activate();
         require(keyDown(keys.Get(), document.context.Get(), VK_F1, true, true), "auto mode shortcut");
         type(keys.Get(), document.context.Get(), "tkatjdsdi");
         require(!keyDown(keys.Get(), document.context.Get(), VK_SPACE), "host inserts the space");
@@ -176,7 +181,9 @@ void testRegisteredTsf() {
         check(thread->SetFocus(nullptr), "clear sentence focus");
         pump();
     }
-    check(profiles->DeactivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS), "deactivate test process Amu profile");
+    if (SUCCEEDED(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active)) && active.clsid == ServiceId) {
+        check(profiles->DeactivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS), "deactivate test process Amu profile");
+    }
     keys.Reset();
     pump();
     check(thread->Deactivate(), "Deactivate TSF");
@@ -222,6 +229,17 @@ void testCompositionContext() {
         for (char key : std::string("sk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input after host termination");
         check(session->process({2, 0}, consumed), "finish after host termination");
         require(document.store->text == L"🙂 갑ㅅ가나가나", "host termination never reuses committed preedit");
+        document.store->failNextSelection = true;
+        auto failure = session->process({0, 'r'}, consumed);
+        require(FAILED(failure) && consumed, "a key already written before a caret failure must not be forwarded twice");
+        require(document.store->text == L"🙂 갑ㅅ가나가나ㄱ" && !session->available(), "partial host failure preserves written text and stops the session");
+        session->retire(); session.Reset(); pump();
+        session.Attach(new ContextSession(document.context.Get(), client, attribute, 1));
+        check(session->attach(), "fresh session after host failure");
+        document.store->failNextWrite = true;
+        failure = session->process({0, 'r'}, consumed);
+        require(FAILED(failure) && !consumed, "a refused text write must forward the original key");
+        require(document.store->text == L"🙂 갑ㅅ가나가나ㄱ", "refused text write preserves the document");
         session->retire(); session.Reset(); pump();
         check(thread->SetFocus(nullptr), "composition blur");
     }
