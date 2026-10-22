@@ -126,6 +126,27 @@ void testTsf(IClassFactory* factory) {
         check(thread->SetFocus(nullptr), "clear long input focus");
         pump();
     }
+    {
+        Document document(thread.Get(), client);
+        check(thread->SetFocus(document.manager.Get()), "mixed sentence focus");
+        require(keyDown(keys.Get(), document.context.Get(), VK_F1, true, true), "auto mode shortcut");
+        type(keys.Get(), document.context.Get(), "tkatjdsdi");
+        require(!keyDown(keys.Get(), document.context.Get(), VK_SPACE), "host inserts the space");
+        document.store->insertFromHost(L" ");
+        type(keys.Get(), document.context.Get(), "tkrhtlvdj");
+        require(!keyDown(keys.Get(), document.context.Get(), VK_RETURN), "finish mixed sentence");
+        require(document.store->text == L"삼성sdi 사고싶어", "mixed sentence preserves one host space");
+        ComPtr<ITfCompartmentMgr> compartments;
+        check(document.context.As(&compartments), "context compartments");
+        ComPtr<ITfCompartment> disabled;
+        check(compartments->GetCompartment(GUID_COMPARTMENT_KEYBOARD_DISABLED, &disabled), "keyboard disabled compartment");
+        VARIANT value{}; value.vt = VT_I4; value.lVal = 1;
+        check(disabled->SetValue(client, &value), "disable composition");
+        require(!keyDown(keys.Get(), document.context.Get(), 'A'), "disabled input context passes through");
+        require(document.store->text == L"삼성sdi 사고싶어", "disabled context is unchanged");
+        check(thread->SetFocus(nullptr), "clear sentence focus");
+        pump();
+    }
     check(service->Deactivate(), "Deactivate Amu");
     service.Reset(); keys.Reset();
     pump();

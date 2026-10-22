@@ -1,4 +1,5 @@
 #include "text_service.h"
+#include <cstdio>
 
 namespace amu {
 HRESULT TextService::Activate(ITfThreadMgr* manager, TfClientId client) { return ActivateEx(manager, client, 0); }
@@ -7,20 +8,25 @@ HRESULT TextService::ActivateEx(ITfThreadMgr* manager, TfClientId client, DWORD 
     manager_ = manager;
     client_ = client;
     secure_ = (flags & TF_TMAE_SECUREMODE) != 0;
+    const char* stage = "create category manager";
     ComPtr<ITfCategoryMgr> categories;
     auto result = CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&categories));
-    if (SUCCEEDED(result)) result = categories->RegisterGUID(UnderlineId, &attribute_);
+    if (SUCCEEDED(result)) { stage = "register display GUID"; result = categories->RegisterGUID(UnderlineId, &attribute_); }
     ComPtr<ITfSource> source;
-    if (SUCCEEDED(result)) result = manager_.As(&source);
-    if (SUCCEEDED(result)) result = source->AdviseSink(IID_ITfThreadMgrEventSink, static_cast<ITfThreadMgrEventSink*>(this), &managerSink_);
-    if (SUCCEEDED(result)) result = source->AdviseSink(IID_ITfThreadFocusSink, static_cast<ITfThreadFocusSink*>(this), &focusSink_);
+    if (SUCCEEDED(result)) { stage = "get thread source"; result = manager_.As(&source); }
+    if (SUCCEEDED(result)) { stage = "advise thread manager sink"; result = source->AdviseSink(IID_ITfThreadMgrEventSink, static_cast<ITfThreadMgrEventSink*>(this), &managerSink_); }
+    if (SUCCEEDED(result)) { stage = "advise thread focus sink"; result = source->AdviseSink(IID_ITfThreadFocusSink, static_cast<ITfThreadFocusSink*>(this), &focusSink_); }
     ComPtr<ITfKeystrokeMgr> keys;
-    if (SUCCEEDED(result)) result = manager_.As(&keys);
+    if (SUCCEEDED(result)) { stage = "get keystroke manager"; result = manager_.As(&keys); }
     if (SUCCEEDED(result)) {
+        stage = "advise key event sink";
         result = keys->AdviseKeyEventSink(client_, this, TRUE);
         advisedKeys_ = SUCCEEDED(result);
     }
-    if (FAILED(result)) Deactivate();
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Amu activation failed: %s (0x%08lx)\n", stage, static_cast<unsigned long>(result));
+        Deactivate();
+    }
     return result;
 }
 HRESULT TextService::Deactivate() {
@@ -104,15 +110,18 @@ bool TextService::accepts(ITfContext* context) const {
     if (!context || !manager_ || secure_) return false;
     TF_STATUS status{};
     if (FAILED(context->GetStatus(&status)) || (status.dwDynamicFlags & TS_SD_READONLY)) return false;
-    ComPtr<ITfCompartmentMgr> compartments;
-    if (FAILED(context->QueryInterface(IID_PPV_ARGS(&compartments)))) return false;
-    for (const auto& guid : {GUID_COMPARTMENT_KEYBOARD_DISABLED, GUID_COMPARTMENT_EMPTYCONTEXT}) {
-        ComPtr<ITfCompartment> compartment;
-        VARIANT value{};
-        if (SUCCEEDED(compartments->GetCompartment(guid, &compartment)) && SUCCEEDED(compartment->GetValue(&value))) {
-            bool disabled = value.vt == VT_I4 && value.lVal != 0;
-            VariantClear(&value);
-            if (disabled) return false;
+    IUnknown* scopes[] = {context, manager_.Get()};
+    for (auto scope : scopes) {
+        ComPtr<ITfCompartmentMgr> compartments;
+        if (FAILED(scope->QueryInterface(IID_PPV_ARGS(&compartments)))) return false;
+        for (const auto& guid : {GUID_COMPARTMENT_KEYBOARD_DISABLED, GUID_COMPARTMENT_EMPTYCONTEXT}) {
+            ComPtr<ITfCompartment> compartment;
+            VARIANT value{};
+            if (SUCCEEDED(compartments->GetCompartment(guid, &compartment)) && SUCCEEDED(compartment->GetValue(&value))) {
+                bool disabled = value.vt == VT_I4 && value.lVal != 0;
+                VariantClear(&value);
+                if (disabled) return false;
+            }
         }
     }
     return true;

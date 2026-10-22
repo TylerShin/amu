@@ -45,6 +45,7 @@ public:
     HRESULT STDMETHODCALLTYPE OnUpdateComposition(ITfCompositionView*, ITfRange*) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE OnEndComposition(ITfCompositionView*) override { --compositions; return S_OK; }
     void moveCaret(LONG position);
+    void insertFromHost(const std::wstring& value);
 private:
     ComPtr<ITextStoreACPSink> sink_;
     DWORD lock_ = 0;

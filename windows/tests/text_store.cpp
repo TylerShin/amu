@@ -75,4 +75,10 @@ HRESULT TextStore::GetTextExt(TsViewCookie, LONG, LONG, RECT* rect, BOOL* clippe
     *rect = {0, 0, 100, 20}; *clipped = FALSE; return S_OK;
 }
 void TextStore::moveCaret(LONG position) { start = end = position; if (sink_) sink_->OnSelectionChange(); }
+void TextStore::insertFromHost(const std::wstring& value) {
+    TS_TEXTCHANGE change{start, end, start + static_cast<LONG>(value.size())};
+    text.replace(start, end - start, value);
+    start = end = change.acpNewEnd;
+    if (sink_) { sink_->OnTextChange(0, &change); sink_->OnSelectionChange(); }
+}
 }
