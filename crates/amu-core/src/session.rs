@@ -2,6 +2,7 @@ use crate::{
     ComposerError, Language,
     context::RecentContext,
     korean_buffer::KoreanBuffer,
+    korean_initials,
     language::{Decoder, Reading, SegmentOrder},
 };
 
@@ -99,7 +100,12 @@ impl Session {
             commit = self.finish().commit;
         }
         self.literal.push(ascii as char);
-        if self.mode != Mode::English && (!self.edited || self.reading == Reading::Korean) {
+        if self.reading == Reading::Initials {
+            // Initials retain literal keys, including after deletion. A later
+            // vowel can resume normal composition without losing a consonant.
+            self.korean.recompose(&self.literal);
+            self.edited = false;
+        } else if self.mode != Mode::English && (!self.edited || self.reading == Reading::Korean) {
             self.korean.append(ascii);
         } else if self.edited
             && matches!(
@@ -120,7 +126,7 @@ impl Session {
 
     fn backspace(&mut self) -> Update {
         let consumed = match self.reading {
-            Reading::English => {
+            Reading::English | Reading::Initials => {
                 self.korean.reset();
                 self.literal.pop().is_some()
             }
@@ -222,6 +228,7 @@ impl Session {
         match self.reading {
             Reading::English => self.literal.clone(),
             Reading::Korean => self.korean.text(),
+            Reading::Initials => korean_initials::render(&self.literal),
             Reading::Mixed {
                 boundary,
                 order: SegmentOrder::KoreanFirst,

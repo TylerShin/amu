@@ -4,6 +4,9 @@ use std::{collections::BTreeMap, time::Instant};
 #[path = "../tests/support/mixed_boundaries.rs"]
 mod mixed_boundaries;
 
+#[path = "../tests/support/initials.rs"]
+mod initials;
+
 const FIXTURES: &str = include_str!("../tests/fixtures/decoder.tsv");
 const WORD_HINTS: &str = include_str!("../src/english-seed.txt");
 const CONSONANTS: &[u8] = b"bcdfghjklmnpqrstvwxyz";
@@ -33,12 +36,37 @@ fn main() {
     report_regressions();
     report_short_inputs();
     report_mixed_boundaries();
+    report_initial_expressions();
     report_generated_initialisms(0x5a91_c3d7, "development");
     report_generated_initialisms(0xa720_4e91, "held-out");
     if let Some(path) = std::env::args().nth(1) {
         report_korean_corpus(&path, std::env::args().nth(2).as_deref());
     }
     report_latency();
+}
+
+fn report_initial_expressions() {
+    let mut expressions = 0;
+    let mut capitals = 0;
+    let mut latin = 0;
+    for &(keys, text) in initials::EXPRESSIONS {
+        for (name, context) in CONTEXTS {
+            let expected = if name.contains("English") { keys } else { text };
+            expressions += usize::from(decode_after(keys, context) == expected);
+            let uppercase = keys.to_ascii_uppercase();
+            capitals += usize::from(decode_after(&uppercase, context) == uppercase);
+        }
+    }
+    for &word in initials::LATIN_COUNTEREXAMPLES {
+        for (_, context) in CONTEXTS {
+            latin += usize::from(decode_after(word, context) == word);
+        }
+    }
+    let expression_count = initials::EXPRESSIONS.len() * CONTEXTS.len();
+    let latin_count = initials::LATIN_COUNTEREXAMPLES.len() * CONTEXTS.len();
+    println!("initial expressions with context: {expressions}/{expression_count}");
+    println!("initial-expression keys in uppercase: {capitals}/{expression_count}");
+    println!("initial-expression Latin counterexamples: {latin}/{latin_count}");
 }
 
 fn report_short_inputs() {

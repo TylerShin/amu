@@ -1,7 +1,10 @@
-use amu_core::{Input, Mode, Session};
+use amu_core::{HangulComposer, Input, Mode, Session};
 
 #[path = "support/mixed_boundaries.rs"]
 mod mixed_boundaries;
+
+#[path = "support/initials.rs"]
+mod initials;
 
 const CASES: &str = include_str!("fixtures/decoder.tsv");
 const WORD_HINTS: &str = include_str!("../src/english-seed.txt");
@@ -12,6 +15,122 @@ const CONTEXTS: &[&[&str]] = &[
     &["hello"],
     &["hello", "hello", "hello", "hello"],
 ];
+
+#[test]
+fn initial_expressions_compete_with_latin_using_context_and_case() {
+    for &(keys, expected) in initials::EXPRESSIONS {
+        assert!(!WORD_HINTS.split_ascii_whitespace().any(|word| word == keys));
+        for (context, selected) in [
+            (&[][..], expected),
+            (&["gksrmf"][..], expected),
+            (&["gksrmf"; 4][..], expected),
+            (&["hello"][..], keys),
+            (&["hello"; 4][..], keys),
+        ] {
+            let mut session = session_after(context);
+            assert_eq!(
+                type_keys(&mut session, keys),
+                selected,
+                "{context:?}: {keys}"
+            );
+            assert_eq!(session.process(Input::WordBoundary).commit, selected);
+            assert!(session.process(Input::Finish).commit.is_empty());
+
+            let capitals = keys.to_ascii_uppercase();
+            let mut session = session_after(context);
+            assert_eq!(type_keys(&mut session, &capitals), capitals);
+        }
+    }
+}
+
+#[test]
+fn initial_expressions_preserve_latin_counterexamples() {
+    for word in initials::LATIN_COUNTEREXAMPLES {
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            assert_eq!(type_keys(&mut session, word), *word, "{context:?}: {word}");
+        }
+    }
+}
+
+#[test]
+fn unregistered_initial_pairs_do_not_depend_on_an_expression_list() {
+    let mut composer = HangulComposer::new().unwrap();
+    let consonants: Vec<_> = (b'a'..=b'z')
+        .filter_map(|key| {
+            composer.reset();
+            let text = composer.push(key).preedit;
+            let character = text.chars().next().unwrap();
+            // No vowel in either reading: these pairs cannot be a partial
+            // English syllable. Check every pair, not a slang vocabulary.
+            (('ㄱ'..='ㅎ').contains(&character) && !b"aeiou".contains(&key))
+                .then_some((key, character))
+        })
+        .collect();
+    for &(first_key, first) in &consonants {
+        for &(second_key, second) in &consonants {
+            let keys = String::from_utf8(vec![first_key, second_key]).unwrap();
+            if first == second || WORD_HINTS.split_ascii_whitespace().any(|word| word == keys) {
+                continue;
+            }
+            let mut session = Session::new(Mode::Auto).unwrap();
+            assert_eq!(
+                type_keys(&mut session, &keys),
+                format!("{first}{second}"),
+                "{keys}"
+            );
+            assert_eq!(session.process(Input::Backspace).preedit, first.to_string());
+            assert_eq!(
+                type_keys(&mut session, &keys[1..]),
+                format!("{first}{second}")
+            );
+        }
+    }
+}
+
+#[test]
+fn initials_respect_mode_focus_and_bounded_commit() {
+    for (mode, expected) in [
+        (Mode::English, "rt"),
+        (Mode::Korean, "ㄳ"),
+        (Mode::Auto, "ㄱㅅ"),
+    ] {
+        let mut session = Session::new(mode).unwrap();
+        assert_eq!(type_keys(&mut session, "rt"), expected);
+        assert_eq!(session.change_mode(Mode::English).commit, expected);
+        assert_eq!(type_keys(&mut session, "fd"), "fd");
+    }
+    let mut session = session_after(&["hello"]);
+    assert_eq!(type_keys(&mut session, "fd"), "fd");
+    session.process(Input::Finish);
+    assert_eq!(type_keys(&mut session, "fd"), "ㄹㅇ");
+    session.reset();
+    let keys = "rt".repeat(32);
+    let expected = "ㄱㅅ".repeat(32);
+    assert_eq!(type_keys(&mut session, &keys), expected);
+    assert_eq!(session.process(Input::Letter(b'f')).commit, expected);
+    assert_eq!(type_keys(&mut session, "d"), "ㄹㅇ");
+}
+
+#[test]
+fn initial_editing_keeps_each_consonant_separate_and_resumes_syllables() {
+    for &(keys, expected) in initials::EXPRESSIONS {
+        let mut session = Session::new(Mode::Auto).unwrap();
+        assert_eq!(type_keys(&mut session, keys), expected);
+        for remaining in (0..keys.len()).rev() {
+            assert_eq!(
+                session.process(Input::Backspace).preedit,
+                expected.chars().take(remaining).collect::<String>(),
+                "{keys}: {remaining}"
+            );
+        }
+        assert!(!session.process(Input::Backspace).consumed);
+    }
+    let mut session = Session::new(Mode::Auto).unwrap();
+    type_keys(&mut session, "fd");
+    assert_eq!(session.process(Input::Backspace).preedit, "ㄹ");
+    assert_eq!(type_keys(&mut session, "k"), "라");
+}
 
 #[test]
 fn unregistered_english_spelling_survives_composable_endings() {

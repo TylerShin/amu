@@ -15,6 +15,7 @@ pub(crate) struct EnglishEvidence {
     pub cost: f32,
     pub supports_split: bool,
     pub word_hint: bool,
+    pub prefix_hint: bool,
     pub capitals: bool,
     pub connected_spelling: bool,
 }
@@ -30,6 +31,7 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     let length = keys.len() as f32;
     // A case-folded dictionary match must not erase meaningful Korean Shift.
     let word_hint = model.words.contains(lowercase.as_str()) && (use_capitals || keys == lowercase);
+    let prefix_hint = model.prefixes.contains(lowercase.as_str());
     let capitals = use_capitals
         && keys.len() >= 2
         && keys.bytes().all(|key| key.is_ascii_uppercase())
@@ -55,13 +57,14 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     }
     if word_hint {
         cost = cost.min(length * 0.7);
-    } else if model.prefixes.contains(lowercase.as_str()) {
+    } else if prefix_hint {
         cost = cost.min(length * 1.5);
     }
     EnglishEvidence {
         cost,
         supports_split: keys.len() >= 3 || capitals || (keys.len() >= 2 && word_hint),
         word_hint,
+        prefix_hint,
         capitals,
         connected_spelling,
     }

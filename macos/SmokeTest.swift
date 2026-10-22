@@ -35,13 +35,44 @@ struct SmokeTest {
         verifyShortReadingsAcrossContext(input)
         verifyEnglishFirstBoundaries(input)
         verifyConnectedEnglishSpelling(input)
+        verifyInitialExpressions(input)
         verifyMarkedTextPresentation()
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, explicit composition style, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, explicit composition style, selection replacement, reentrant finish")
+    }
+
+    private static func verifyInitialExpressions(_ input: TypingView) {
+        let korean: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f"), (49, " ")]
+        let english: [(UInt16, String)] = [(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o"), (49, " ")]
+        let contexts = [(0, korean, "", false), (1, korean, "한글 ", false), (1, english, "hello ", true)]
+        let expressions: [(String, [(UInt16, String)])] = [
+            ("ㄹㅇ", [(3, "f"), (2, "d")]),
+            ("ㅇㅈ", [(2, "d"), (13, "w")]),
+            ("ㄱㅅ", [(15, "r"), (17, "t")]),
+            ("ㄱㅅㄱㅅ", [(15, "r"), (17, "t"), (15, "r"), (17, "t")]),
+            ("ㄹㅇㅋㅋ", [(3, "f"), (2, "d"), (6, "z"), (6, "z")]),
+        ]
+        for (count, context, before, useLatin) in contexts {
+            for (text, keys) in expressions {
+                reset(input)
+                for _ in 0..<count { press(input, context) }
+                press(input, keys)
+                let selected = useLatin ? keys.map { $0.1 }.joined() : text
+                let expected = before + selected
+                expect(input.string == expected && input.hasMarkedText(), "Initial reading: \(expected), actual: \(input.string)")
+                press(input, [(51, "\u{7f}")])
+                expect(input.string == before + String(selected.dropLast()), "Delete one initial, including a compound-coda pair")
+                press(input, [keys.last!])
+                expect(input.string == expected, "Retyping must restore the selected reading")
+                press(input, [(49, " ")])
+                input.coordinator.finish(client: input)
+                expect(input.string == expected + " " && !input.hasMarkedText(), "Initial expression must commit only once")
+            }
+        }
     }
 
     private static func verifyConnectedEnglishSpelling(_ input: TypingView) {

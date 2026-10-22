@@ -3,6 +3,7 @@ mod context;
 mod english;
 mod korean_buffer;
 mod korean_evidence;
+mod korean_initials;
 mod korean_statistics;
 mod language;
 mod session;

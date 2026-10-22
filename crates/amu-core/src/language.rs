@@ -1,6 +1,6 @@
 use crate::{
     ComposerError, context::RecentContext, english, korean_buffer::KoreanBuffer,
-    korean_evidence::KoreanEvidence,
+    korean_evidence::KoreanEvidence, korean_initials,
 };
 
 const LANGUAGE_SWITCH_COST: f32 = 2.0;
@@ -28,6 +28,7 @@ pub(crate) enum SegmentOrder {
 pub(crate) enum Reading {
     English,
     Korean,
+    Initials,
     Mixed {
         boundary: usize,
         order: SegmentOrder,
@@ -53,7 +54,11 @@ impl Decoder {
         }
         let korean_evidence = KoreanEvidence::assess(korean, keys.len());
         let use_capitals = !korean_evidence.explains_capitals(keys, korean);
-        if korean_evidence.repeated_jamo && !use_capitals {
+        let initial_expression = korean_initials::has_expression_shape(keys);
+        if initial_expression && prefers_initials(keys, context) {
+            return Reading::Initials;
+        }
+        if !initial_expression && korean_evidence.repeated_jamo && !use_capitals {
             return Reading::Korean;
         }
         let mut best = unsplit_candidate(keys, korean, &korean_evidence, context, use_capitals);
@@ -260,10 +265,27 @@ impl Reading {
     pub(crate) fn language(self) -> Language {
         match self {
             Self::English => Language::English,
-            Self::Korean => Language::Korean,
+            Self::Korean | Self::Initials => Language::Korean,
             Self::Mixed { .. } => Language::Mixed,
         }
     }
+}
+
+fn prefers_initials(keys: &str, context: &RecentContext) -> bool {
+    let english = english::assess(keys, true);
+    // A known word prefix ending in a vowel is still a plausible open English
+    // syllable. Preserve it while the rest of the word is being typed.
+    let open_word_prefix = english.prefix_hint
+        && keys
+            .as_bytes()
+            .last()
+            .is_some_and(|key| b"aeiou".contains(key));
+    if english.word_hint || english.connected_spelling || open_word_prefix {
+        return false;
+    }
+    // With no prior text, prefer the short Korean expression. An English prior
+    // can resolve the same keys as Latin without changing global input mode.
+    context.cost(Language::English) >= context.cost(Language::Korean)
 }
 
 fn mixed_cost(
