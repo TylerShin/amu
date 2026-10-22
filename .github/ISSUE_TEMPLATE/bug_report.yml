@@ -1,0 +1,70 @@
+name: 버그·오변환 제보
+description: 잘못된 한영 판독, 조합·삭제, 앱 호환성 문제를 알려주세요.
+title: "[버그] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        개인정보를 지운 가짜 문장으로 재현해주세요. 비밀번호·토큰·업무 문서를 첨부하지 마세요.
+        보안 문제는 SECURITY.md의 비공개 연락처로 알려주세요.
+  - type: input
+    id: version
+    attributes:
+      label: Amu 버전 또는 커밋
+      placeholder: "예: git rev-parse --short HEAD 결과"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 운영체제·CPU·입력 대상 앱
+      placeholder: "예: macOS 26 / Apple Silicon / Firefox 버전"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 사용 경로
+      options:
+        - Amu Playground
+        - macOS 시스템 입력기
+        - Rust 코어·C ABI
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: 입력 모드
+      options:
+        - 자동 판독
+        - 한글 고정
+        - 영문 고정
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 실제 누른 키와 재현 순서
+      description: 최종 글자 대신 키열과 Shift·Space·Backspace·클릭·앱 전환 순서를 적어주세요.
+      placeholder: "빈 입력칸 → tkatjdsdi → Space → Backspace"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 결과
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과
+      description: 글자 누락·중복이 있다면 어느 단계인지 함께 적어주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: frequency
+    attributes:
+      label: 재현 빈도와 추가 정보
+      description: 처음 실행·초기화 후에도 같은지, 특정 앱에서만 발생하는지 알려주세요.

@@ -1,0 +1,12 @@
+{
+  "source": "https://raw.githubusercontent.com/UniversalDependencies/UD_Korean-GSD/7628157f2ba54e0580b2c03e22f1a9f5b111d7e7/ko_gsd-ud-train.conllu",
+  "revision": "7628157f2ba54e0580b2c03e22f1a9f5b111d7e7",
+  "sourceSha256": "0bd96ceae934d1089ece599b8904b43b0074df75e41a8e07e4b72264337b39f8",
+  "license": "CC-BY-SA-4.0",
+  "transform": "Hangul-only FORM tokens; smoothed syllable unigrams and bigrams; no Latin terms or word lookup",
+  "tokens": 45807,
+  "syllables": 138746,
+  "unigramEntries": 1280,
+  "bigramEntries": 21559,
+  "modelSha256": "fc95a8a802562fb170671f4f2b9b123a9a94c8e0c1060e88d2ec4f3b26349b9c"
+}

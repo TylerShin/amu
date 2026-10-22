@@ -1,0 +1,35 @@
+cold session/model initialization: 3.49ms
+regression english: 16/16
+regression english-first: 4/4
+regression korean: 42/42
+regression novel-english: 10/10
+regression novel-mixed: 12/12
+development generated lowercase: 445/600 intended Latin suffixes preserved
+  miss: 삼성xmx → 삼성틑
+  miss: 설정xmx → 설정틑
+  miss: 화면xmx → 화면틑
+  miss: 기능xmx → 기능틑
+  miss: 모델xmx → 모델틑
+  miss: 엔진xmx → 엔진틑
+  miss: 모델qxlx → 모덻팉
+  miss: 삼성clc → 삼성칯
+development generated uppercase: 600/600 intended Latin suffixes preserved
+held-out generated lowercase: 447/600 intended Latin suffixes preserved
+  miss: 삼성kcwy → 삼서앛죠
+  miss: 설정kcwy → 설저앛죠
+  miss: 화면kcwy → 화며낯죠
+  miss: 기능kcwy → 기느앛죠
+  miss: 모델kcwy → 모데랓죠
+  miss: 엔진kcwy → 엔지낯죠
+  miss: 삼성hdyr → 삼서오욕
+  miss: 설정hdyr → 설저오욕
+held-out generated uppercase: 594/600 intended Latin suffixes preserved
+  miss: 삼성PTP → 삼서예쎼
+  miss: 설정PTP → 설저예쎼
+  miss: 화면PTP → 화며녜쎼
+  miss: 기능PTP → 기느예쎼
+  miss: 모델PTP → 모데례쎼
+  miss: 엔진PTP → 엔지녜쎼
+held-out Korean FORM tokens (2+ syllables, neutral context): 8747/8747 preserved
+release core fixture keys: n=56100, p50=0.6µs p95=3.0µs p99=4.3µs
+release core 64-key token: n=6400, p50=28.0µs p95=94.8µs p99=106.2µs

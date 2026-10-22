@@ -1,0 +1,15 @@
+research/tools/
+research/upstream/
+research/build/
+target/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example
+mise.local.toml
+.mise.local.toml
+*.p12
+*.p8
+*.mobileprovision
+.local/

@@ -1,0 +1,12 @@
+changelog:
+  categories:
+    - title: 새 기능과 개선
+      labels: [enhancement]
+    - title: 수정
+      labels: [bug]
+    - title: 문서
+      labels: [documentation]
+    - title: 의존성과 개발 환경
+      labels: [dependencies]
+    - title: 그 밖의 변경
+      labels: ['*']

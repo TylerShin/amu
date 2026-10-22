@@ -1,0 +1,11 @@
+[package]
+name = "amu-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Amu 한영 자동 판독과 한글 조합 공통 코어"
+links = "hangul"

@@ -1,0 +1,16 @@
+[package]
+name = "amu-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Amu 공통 코어의 플랫폼 연결용 C ABI"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+amu-core = { path = "../amu-core" }

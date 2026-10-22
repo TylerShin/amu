@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 검증 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: 소스 받기
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: 고정 개발 도구 설치
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: "2025.12.9"
+      - name: 공개 파일·문서·모델 검사
+        run: mise run repo:check
+      - name: 워크플로와 비밀정보 검사
+        if: runner.os == 'Linux'
+        run: |
+          mise run workflow:check
+          mise run secrets:check
+      - name: Rust 포맷·lint·코어·FFI 검사
+        run: mise run check
+      - name: macOS 빌드·서명·AppKit 연결 검사
+        if: runner.os == 'macOS'
+        run: mise run macos:smoke

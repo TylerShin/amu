@@ -1,0 +1,26 @@
+regression mismatch: ahepfZKD → 모델캉; intended 모델ZKD
+regression english: 16/16
+regression english-first: 4/4
+regression korean: 42/42
+regression novel-english: 10/10
+regression novel-mixed: 11/12
+generated lowercase: 392/600 intended Latin suffixes preserved
+  miss: 기능phwp → 긴mdphwp
+  miss: 기능jhjc → 긴mdjhjc
+  miss: 기능zrf → 긴mdzrf
+  miss: 기능bxbj → 긴mdbxbj
+  miss: 삼성xmx → 삼성틑
+  miss: 설정xmx → 설정틑
+  miss: 화면xmx → 화면틑
+  miss: 기능xmx → 기능틑
+generated uppercase: 532/600 intended Latin suffixes preserved
+  miss: 설정DNR → 설정욲
+  miss: 화면DNR → 화면욲
+  miss: 기능DNR → 기능욲
+  miss: 모델DNR → 모델욲
+  miss: 엔진DNR → 엔진욲
+  miss: 설정FBG → 설정륳
+  miss: 화면FBG → 화면륳
+  miss: 기능FBG → 기능륳
+release core fixture keys: n=56100, p50=0.6µs p95=3.5µs p99=5.0µs
+release core 64-key token: n=6400, p50=30.2µs p95=98.3µs p99=108.2µs

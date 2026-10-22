@@ -1,0 +1,22 @@
+# 외부 코드와 데이터
+
+Amu에서 작성한 코드·문서는 [MIT 라이선스](LICENSE)를 따른다. 아래 외부 코드와 데이터에는 각각의 라이선스가 적용된다. 원본 파일의 저작권 표시를 유지한다.
+
+| 구성 요소 | 용도 | 출처와 고정 리비전 | 라이선스 |
+|---|---|---|---|
+| libhangul 조합 소스 7개 | 두벌식 조합·삭제 | [libhangul/libhangul](https://github.com/libhangul/libhangul/tree/23d2cd9d10d516d523d60c562dbcc7ea08139a09) | [LGPL-2.1-or-later](third_party/libhangul/COPYING) |
+| 한국어 음절 통계 | 혼합 후보의 한글 경계 점수 | [UD Korean GSD](https://github.com/UniversalDependencies/UD_Korean-GSD/tree/7628157f2ba54e0580b2c03e22f1a9f5b111d7e7)의 train 자료를 변환 | [CC BY-SA 4.0](models/korean/LICENSE.txt) |
+
+## libhangul
+
+원본 조합 소스·헤더를 수정 없이 가져왔고, 앱에서 교체할 수 있는 공유 라이브러리로 빌드한다. 앱 번들에는 해당 소스, COPYING, [교체 빌드 안내](docs/libhangul-rebuild.md)를 함께 넣는다. 자세한 범위는 [libhangul 안내](third_party/libhangul/README.md)를 따른다.
+
+## 한국어 음절 통계
+
+기여자: Ryan McDonald, Joakim Nivre, Daniel Zeman, Jinho Choi, Na-Rae Han, Jena D. Hwang, Jayeol Chun 및 Universal Dependencies 기여자.
+
+참고 문헌: Jayeol Chun, Na-Rae Han, Jena D. Hwang, Jinho D. Choi, *Building Universal Dependency Treebanks in Korean*, LREC 2018. 원본 자료의 추가 출처 표시는 upstream README를 따른다.
+
+Amu는 한글로만 이루어진 FORM 토큰에서 음절·인접 음절 쌍을 세고 평활화한 점수로 변환했다. 이 변환 데이터인 `models/korean/syllables.tsv`에도 CC BY-SA 4.0을 적용한다. 원문 문장이나 영문 약어 목록은 모델에 포함하지 않는다. [변환 설명](models/korean/README.md), [리비전·SHA-256](models/korean/manifest.json), [재생성 스크립트](scripts/train-korean-model.mjs)를 제공한다.
+
+앱에는 통계·출처·라이선스·재생성 스크립트를 함께 넣는다. 원본 말뭉치는 다운로드 캐시에만 저장한다. 빌드에 포함된 모델 데이터의 조건은 Amu 코드의 MIT 표기와 별도로 유지한다.

@@ -1,0 +1,16 @@
+name: 사용·개발 질문
+description: 실행, 설정, 기여 방법에 대해 질문해주세요.
+title: "[질문] "
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: 질문
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: 확인한 문서와 시도한 방법
+      description: 실행 문제라면 버전·환경·명령과 개인정보를 제거한 오류 메시지를 함께 적어주세요.

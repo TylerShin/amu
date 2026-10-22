@@ -1,0 +1,288 @@
+{
+  "executedAt": "2026-10-22T02:32:39.050Z",
+  "reference": {
+    "repository": "https://github.com/libhangul/libhangul",
+    "revision": "23d2cd9d10d516d523d60c562dbcc7ea08139a09",
+    "keyboard": "2",
+    "options": "library defaults"
+  },
+  "environment": {
+    "node": "v22.22.1",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)"
+  },
+  "status": "passed",
+  "checks": {
+    "composedModernSyllables": 11172,
+    "erasedModernSyllables": 11172,
+    "curatedTraces": 6
+  },
+  "limitations": [
+    "Reference-library checks only; no Amu composer exists yet.",
+    "The host model supports only these Korean/ASCII traces; it is not a grapheme-aware editor.",
+    "No real OS, browser, focus, selection, or IME callback validation."
+  ],
+  "traces": [
+    {
+      "name": "compound coda crosses a syllable boundary",
+      "keys": "rkqtk<<<",
+      "steps": [
+        {
+          "operation": "r",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄱ",
+          "shown": "ㄱ"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "",
+          "preedit": "가",
+          "shown": "가"
+        },
+        {
+          "operation": "q",
+          "consumed": true,
+          "commit": "",
+          "preedit": "갑",
+          "shown": "갑"
+        },
+        {
+          "operation": "t",
+          "consumed": true,
+          "commit": "",
+          "preedit": "값",
+          "shown": "값"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "갑",
+          "preedit": "사",
+          "shown": "갑사"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㅅ",
+          "shown": "갑ㅅ"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "",
+          "shown": "갑"
+        },
+        {
+          "operation": "<",
+          "consumed": false,
+          "commit": "",
+          "preedit": "",
+          "shown": ""
+        }
+      ]
+    },
+    {
+      "name": "compound vowel deletes one component",
+      "keys": "rhk<<<",
+      "steps": [
+        {
+          "operation": "r",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄱ",
+          "shown": "ㄱ"
+        },
+        {
+          "operation": "h",
+          "consumed": true,
+          "commit": "",
+          "preedit": "고",
+          "shown": "고"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "",
+          "preedit": "과",
+          "shown": "과"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "고",
+          "shown": "고"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄱ",
+          "shown": "ㄱ"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "",
+          "shown": ""
+        }
+      ]
+    },
+    {
+      "name": "simple coda crosses a syllable boundary",
+      "keys": "rksk<",
+      "steps": [
+        {
+          "operation": "r",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄱ",
+          "shown": "ㄱ"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "",
+          "preedit": "가",
+          "shown": "가"
+        },
+        {
+          "operation": "s",
+          "consumed": true,
+          "commit": "",
+          "preedit": "간",
+          "shown": "간"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "가",
+          "preedit": "나",
+          "shown": "가나"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄴ",
+          "shown": "가ㄴ"
+        }
+      ]
+    },
+    {
+      "name": "a committed syllable is deleted as host text",
+      "keys": "rk|<",
+      "steps": [
+        {
+          "operation": "r",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄱ",
+          "shown": "ㄱ"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "",
+          "preedit": "가",
+          "shown": "가"
+        },
+        {
+          "operation": "|",
+          "consumed": true,
+          "commit": "가",
+          "preedit": "",
+          "shown": "가"
+        },
+        {
+          "operation": "<",
+          "consumed": false,
+          "commit": "",
+          "preedit": "",
+          "shown": ""
+        }
+      ]
+    },
+    {
+      "name": "shifted onset and vowel",
+      "keys": "RO<<",
+      "steps": [
+        {
+          "operation": "R",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄲ",
+          "shown": "ㄲ"
+        },
+        {
+          "operation": "O",
+          "consumed": true,
+          "commit": "",
+          "preedit": "꺠",
+          "shown": "꺠"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㄲ",
+          "shown": "ㄲ"
+        },
+        {
+          "operation": "<",
+          "consumed": true,
+          "commit": "",
+          "preedit": "",
+          "shown": ""
+        }
+      ]
+    },
+    {
+      "name": "punctuation and space commit exactly once",
+      "keys": "gks, ",
+      "steps": [
+        {
+          "operation": "g",
+          "consumed": true,
+          "commit": "",
+          "preedit": "ㅎ",
+          "shown": "ㅎ"
+        },
+        {
+          "operation": "k",
+          "consumed": true,
+          "commit": "",
+          "preedit": "하",
+          "shown": "하"
+        },
+        {
+          "operation": "s",
+          "consumed": true,
+          "commit": "",
+          "preedit": "한",
+          "shown": "한"
+        },
+        {
+          "operation": ",",
+          "consumed": false,
+          "commit": "한",
+          "preedit": "",
+          "shown": "한,"
+        },
+        {
+          "operation": " ",
+          "consumed": false,
+          "commit": "",
+          "preedit": "",
+          "shown": "한, "
+        }
+      ]
+    }
+  ]
+}

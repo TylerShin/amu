@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.dmg binary
+*.zip binary
+# 외부 소스는 가져온 바이트를 그대로 보관한다.
+third_party/** -text

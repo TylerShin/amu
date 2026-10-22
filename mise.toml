@@ -1,0 +1,60 @@
+[tools]
+rust = { version = "1.99.1", profile = "minimal", components = "rustfmt,clippy" }
+node = "22.22.1"
+actionlint = "1.7.12"
+gitleaks = "8.30.1"
+
+[tasks.doctor]
+description = "프로젝트 도구 버전 확인"
+run = ["rustc --version", "cargo --version", "cargo fmt --version", "cargo clippy --version", "node --version"]
+
+[tasks."composition:check"]
+description = "고정한 libhangul 소스로 한글 조합·삭제 기준 동작 검증"
+run = "node research/probe-composition.mjs"
+
+[tasks."core:test"]
+description = "Rust 조합·세션·C ABI 검사"
+run = "cargo test --workspace --locked"
+
+[tasks."model:korean"]
+description = "고정 리비전·SHA-256의 한국어 음절 통계 재생성"
+run = "node scripts/train-korean-model.mjs"
+
+[tasks."core:evaluate"]
+description = "미등록 약어·일반 입력 평가와 Rust 코어 지연 측정"
+run = "cargo run --release -p amu-core --example evaluate_decoder --locked"
+
+[tasks.check]
+description = "Rust 포맷·lint·기능 검사"
+run = ["cargo fmt --all --check", "cargo clippy --workspace --all-targets --locked -- -D warnings", "cargo test --workspace --locked"]
+
+[tasks."macos:build"]
+description = "서명된 로컬 입력기와 타이핑 테스트 앱 빌드"
+run = "node scripts/build-macos.mjs"
+
+[tasks."macos:install"]
+description = "현재 사용자의 입력기로 Amu 설치·등록"
+depends = ["macos:build"]
+run = "node scripts/install-macos.mjs"
+
+[tasks."macos:play"]
+description = "설치 없이 타이핑 테스트 창 열기"
+depends = ["macos:build"]
+run = "open 'dist/Amu Playground.app'"
+
+[tasks."macos:smoke"]
+description = "AppKit marked text와 Rust C ABI의 통합 검사"
+depends = ["macos:build"]
+run = "node scripts/smoke-macos.mjs"
+
+[tasks."repo:check"]
+description = "공개 파일·문서 링크·모델 무결성·스크립트 문법 검사"
+run = "node scripts/check-repository.mjs"
+
+[tasks."workflow:check"]
+description = "GitHub Actions 구성 검사"
+run = "actionlint"
+
+[tasks."secrets:check"]
+description = "Git 인덱스의 공개 대상 파일을 gitleaks로 검사"
+run = "node scripts/check-secrets.mjs"

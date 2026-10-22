@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/amu-core", "crates/amu-ffi"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+license = "MIT"
+repository = "https://github.com/TylerShin/amu"
+authors = ["Tyler Shin <shincode@icloud.com>"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

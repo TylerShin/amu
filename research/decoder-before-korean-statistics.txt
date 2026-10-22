@@ -1,0 +1,17 @@
+regression english: 16/16
+regression english-first: 4/4
+regression korean: 42/42
+regression novel-english: 10/10
+regression novel-mixed: 12/12
+generated lowercase: 228/600 intended Latin suffixes preserved
+  miss: 삼성phwp → 삼서에hwp
+  miss: 설정phwp → 설저에hwp
+  miss: 화면phwp → 화며네hwp
+  miss: 기능phwp → 기느에hwp
+  miss: 모델phwp → 모데레hwp
+  miss: 엔진phwp → 엔지네hwp
+  miss: 삼성jhjc → 삼서어hjc
+  miss: 설정jhjc → 설저어hjc
+generated uppercase: 600/600 intended Latin suffixes preserved
+release core fixture keys: n=56100, p50=0.6µs p95=3.1µs p99=4.3µs
+release core 64-key token: n=6400, p50=26.0µs p95=87.2µs p99=98.8µs
