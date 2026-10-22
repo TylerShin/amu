@@ -33,12 +33,53 @@ struct SmokeTest {
         verifyShiftAndRepeatedJamo(input)
         verifySpaceKeyPreservesWordBoundary(input)
         verifyShortReadingsAcrossContext(input)
+        verifyEnglishFirstBoundaries(input)
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, selection replacement, reentrant finish")
+    }
+
+    private static func verifyEnglishFirstBoundaries(_ input: TypingView) {
+        let korean: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f"), (49, " ")]
+        let english: [(UInt16, String)] = [(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o"), (49, " ")]
+        let contexts = [(0, korean, ""), (4, korean, "한글 "), (4, english, "hello ")]
+        let prefixes: [([(UInt16, String)], String)] = [
+            ([(0, "a"), (34, "i")], "ai"),
+            ([(0, "A"), (34, "I")], "AI"),
+            ([(12, "q"), (34, "i")], "qi"),
+            ([(34, "i"), (31, "o")], "io"),
+            ([(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o")], "hello"),
+        ]
+        let suffixes: [([(UInt16, String)], String)] = [
+            ([(15, "r"), (4, "h")], "고"),
+            ([(15, "r"), (40, "k")], "가"),
+            ([(3, "f"), (4, "h")], "로"),
+            ([(2, "d"), (35, "p"), (15, "r"), (35, "p")], "에게"),
+            ([(15, "r"), (40, "k"), (12, "q"), (17, "t"), (40, "k")], "갑사"),
+        ]
+        for (count, context, contextText) in contexts {
+            for (prefixKeys, prefix) in prefixes {
+                for (suffixKeys, suffix) in suffixes {
+                    reset(input)
+                    for _ in 0..<count { press(input, context) }
+                    let before = String(repeating: contextText, count: count) + prefix
+                    let expected = before + suffix
+                    press(input, prefixKeys + suffixKeys)
+                    expect(input.string == expected && input.hasMarkedText(), "Mixed boundary: \(expected), actual: \(input.string)")
+                    if suffix == "갑사" {
+                        press(input, [(51, "\u{7f}")])
+                        expect(input.string == before + "갑ㅅ", "Mixed deletion must preserve the settled syllable")
+                        press(input, [(40, "k")])
+                        expect(input.string == expected, "Mixed retyping must restore the suffix")
+                    }
+                    press(input, [(49, " ")])
+                    expect(input.string == expected + " " && !input.hasMarkedText(), "Mixed boundary must commit once: \(expected)")
+                }
+            }
+        }
     }
 
     private static func verifyShortReadingsAcrossContext(_ input: TypingView) {

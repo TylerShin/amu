@@ -1,5 +1,8 @@
 use amu_core::{Input, Mode, Session};
 
+#[path = "support/mixed_boundaries.rs"]
+mod mixed_boundaries;
+
 const CASES: &str = include_str!("fixtures/decoder.tsv");
 const WORD_HINTS: &str = include_str!("../src/english-seed.txt");
 const CONTEXTS: &[&[&str]] = &[
@@ -9,6 +12,81 @@ const CONTEXTS: &[&[&str]] = &[
     &["hello"],
     &["hello", "hello", "hello", "hello"],
 ];
+
+#[test]
+fn unregistered_english_prefixes_compose_korean_suffixes_across_contexts() {
+    for prefix in mixed_boundaries::UNREGISTERED_PREFIXES {
+        assert!(
+            !WORD_HINTS
+                .split_ascii_whitespace()
+                .any(|word| word.eq_ignore_ascii_case(prefix))
+        );
+        for (suffix, korean) in mixed_boundaries::KOREAN_SUFFIXES {
+            for context in CONTEXTS {
+                let keys = format!("{prefix}{suffix}");
+                let expected = format!("{prefix}{korean}");
+                let mut session = session_after(context);
+                assert_eq!(
+                    type_keys(&mut session, &keys),
+                    expected,
+                    "{context:?}: {keys}"
+                );
+                assert_eq!(session.process(Input::WordBoundary).commit, expected);
+                assert!(session.process(Input::Finish).commit.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn short_mixed_readings_preserve_real_syllable_deletion_and_retyping() {
+    for prefix in ["ai", "vi", "qi", "xy", "io"] {
+        let mut session = Session::new(Mode::Auto).unwrap();
+        assert_eq!(
+            type_keys(&mut session, &format!("{prefix}rkqtk")),
+            format!("{prefix}갑사")
+        );
+        assert_eq!(
+            session.process(Input::Backspace).preedit,
+            format!("{prefix}갑ㅅ")
+        );
+        assert_eq!(type_keys(&mut session, "k"), format!("{prefix}갑사"));
+        for remaining in ["갑ㅅ", "갑", ""] {
+            assert_eq!(
+                session.process(Input::Backspace).preedit,
+                format!("{prefix}{remaining}")
+            );
+        }
+        assert_eq!(session.process(Input::Backspace).preedit, &prefix[..1]);
+        assert!(session.process(Input::Backspace).preedit.is_empty());
+        assert_eq!(type_keys(&mut session, "gksrmf"), "한글");
+    }
+}
+
+#[test]
+fn complete_korean_words_are_not_split_at_english_looking_prefixes() {
+    for &(keys, expected) in mixed_boundaries::KOREAN_WORDS {
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            assert_eq!(
+                type_keys(&mut session, keys),
+                expected,
+                "{context:?}: {keys}"
+            );
+        }
+    }
+}
+
+#[test]
+fn english_words_are_not_split_at_composable_suffixes() {
+    for &word in mixed_boundaries::ENGLISH_WORDS {
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            assert_eq!(type_keys(&mut session, word), word, "{context:?}: {word}");
+            assert_eq!(session.process(Input::WordBoundary).commit, word);
+        }
+    }
+}
 
 #[test]
 fn short_readings_survive_case_context_and_editing_boundaries() {

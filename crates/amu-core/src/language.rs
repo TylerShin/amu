@@ -6,6 +6,7 @@ use crate::{
 const LANGUAGE_SWITCH_COST: f32 = 2.0;
 const SPLIT_CONFIDENCE_MARGIN: f32 = 0.75;
 const CAPITAL_BOUNDARY_BONUS: f32 = 3.0;
+const INDEPENDENT_BOUNDARY_BONUS: f32 = 3.0;
 // Missing corpus coverage is weak evidence: it can resolve a minimal open
 // syllable, but must not outweigh an additional composed consonant by itself.
 const UNSUPPORTED_KOREAN_COST: f32 = 1.5;
@@ -61,7 +62,16 @@ impl Decoder {
         }
         let unsplit_cost = best.cost;
         self.consider_korean_first(keys, context, &mut best, unsplit_cost, use_capitals);
-        self.consider_english_first(keys, context, &mut best, unsplit_cost, use_capitals);
+        let whole_korean_supported =
+            crate::korean_statistics::contains_only_observed_syllables(korean);
+        self.consider_english_first(
+            keys,
+            context,
+            &mut best,
+            unsplit_cost,
+            use_capitals,
+            whole_korean_supported,
+        );
         best.reading
     }
 
@@ -95,6 +105,7 @@ impl Decoder {
                             &korean_text,
                             &suffix,
                             context.cost(Language::Korean),
+                            BoundaryEvidence::Shape,
                         ),
                     },
                     unsplit_cost,
@@ -110,33 +121,69 @@ impl Decoder {
         best: &mut Candidate,
         unsplit_cost: f32,
         use_capitals: bool,
+        whole_korean_supported: bool,
     ) {
+        let whole_english_supported = english::assess(keys, use_capitals).word_hint;
         for boundary in 2..keys.len() {
-            let prefix = english::assess(&keys[..boundary], use_capitals);
-            if !prefix.supports_split {
+            let prefix_keys = &keys[..boundary];
+            let suffix_keys = &keys[boundary..];
+            let prefix = english::assess(prefix_keys, use_capitals);
+            // A familiar complete Korean reading must not be split just because
+            // its first keys also spell a short English word.
+            if whole_korean_supported && !prefix.capitals {
                 continue;
             }
-            self.probe.recompose(&keys[boundary..]);
-            let korean_text = self.probe.text();
-            let suffix = KoreanEvidence::assess(&korean_text, keys.len() - boundary);
-            if suffix.complete {
-                best.consider_split(
-                    Candidate {
-                        reading: Reading::Mixed {
-                            boundary,
-                            order: SegmentOrder::EnglishFirst,
-                        },
-                        cost: mixed_cost(
-                            &suffix,
-                            &korean_text,
-                            &prefix,
-                            context.cost(Language::English),
-                        ),
-                    },
-                    unsplit_cost,
-                );
+            let independent_prefix =
+                !whole_english_supported && self.prefers_english_prefix(prefix_keys, &prefix);
+            if !prefix.supports_split && !independent_prefix {
+                continue;
             }
+            self.probe.recompose(suffix_keys);
+            let korean_text = self.probe.text();
+            let suffix = KoreanEvidence::assess(&korean_text, suffix_keys.len());
+            if !suffix.complete {
+                continue;
+            }
+            let evidence = if independent_prefix
+                && independently_reads_korean(suffix_keys, &korean_text, &suffix)
+            {
+                BoundaryEvidence::IndependentReadings
+            } else {
+                BoundaryEvidence::Shape
+            };
+            if !prefix.supports_split && matches!(evidence, BoundaryEvidence::Shape) {
+                continue;
+            }
+            best.consider_split(
+                Candidate {
+                    reading: Reading::Mixed {
+                        boundary,
+                        order: SegmentOrder::EnglishFirst,
+                    },
+                    cost: mixed_cost(
+                        &suffix,
+                        &korean_text,
+                        &prefix,
+                        context.cost(Language::English),
+                        evidence,
+                    ),
+                },
+                unsplit_cost,
+            );
         }
+    }
+
+    fn prefers_english_prefix(&mut self, keys: &str, english: &english::EnglishEvidence) -> bool {
+        self.probe.recompose(keys);
+        let text = self.probe.text();
+        let korean = KoreanEvidence::assess(&text, keys.len());
+        let has_korean_support = if english.word_hint || english.capitals {
+            korean.supports_reading(keys, &text) || korean.repeated_jamo
+        } else {
+            korean.supports_continuation(keys, &text)
+        };
+        !has_korean_support
+            && english.cost < korean.cost + korean_coverage_cost(keys, &text, &korean)
     }
 }
 
@@ -153,15 +200,10 @@ fn unsplit_candidate(
     // evidence or erase capitals that Korean Shift usage does not explain.
     let use_context =
         has_korean_support && english_evidence.word_hint && !english_evidence.capitals;
-    let coverage_cost = if korean_evidence.complete && !has_korean_support {
-        UNSUPPORTED_KOREAN_COST
-    } else {
-        0.0
-    };
     let mut best = Candidate {
         reading: Reading::Korean,
         cost: korean_evidence.cost
-            + coverage_cost
+            + korean_coverage_cost(keys, korean, korean_evidence)
             + if use_context {
                 context.cost(Language::Korean)
             } else {
@@ -196,7 +238,13 @@ fn mixed_cost(
     text: &str,
     english: &english::EnglishEvidence,
     context_cost: f32,
+    evidence: BoundaryEvidence,
 ) -> f32 {
+    if matches!(evidence, BoundaryEvidence::IndependentReadings) {
+        // Two independently supported readings provide boundary evidence even
+        // without a registered word or an uppercase transition.
+        return korean.cost + english.cost - INDEPENDENT_BOUNDARY_BONUS;
+    }
     let boundary_cost = if english.capitals {
         -CAPITAL_BOUNDARY_BONUS
     } else {
@@ -208,6 +256,26 @@ fn mixed_cost(
         context_cost * 0.5
     };
     korean.cost + english.cost + LANGUAGE_SWITCH_COST + boundary_cost + prior
+}
+
+enum BoundaryEvidence {
+    Shape,
+    IndependentReadings,
+}
+
+fn independently_reads_korean(keys: &str, text: &str, korean: &KoreanEvidence) -> bool {
+    let use_capitals = !korean.explains_capitals(keys, text);
+    korean.ordinary
+        && crate::korean_statistics::contains_only_observed_syllables(text)
+        && korean.cost < english::assess(keys, use_capitals).cost
+}
+
+fn korean_coverage_cost(keys: &str, text: &str, korean: &KoreanEvidence) -> f32 {
+    if korean.complete && !korean.supports_reading(keys, text) {
+        UNSUPPORTED_KOREAN_COST
+    } else {
+        0.0
+    }
 }
 
 struct Candidate {

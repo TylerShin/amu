@@ -1,6 +1,9 @@
 use amu_core::{Input, Mode, Session};
 use std::{collections::BTreeMap, time::Instant};
 
+#[path = "../tests/support/mixed_boundaries.rs"]
+mod mixed_boundaries;
+
 const FIXTURES: &str = include_str!("../tests/fixtures/decoder.tsv");
 const WORD_HINTS: &str = include_str!("../src/english-seed.txt");
 const CONSONANTS: &[u8] = b"bcdfghjklmnpqrstvwxyz";
@@ -29,10 +32,11 @@ fn main() {
     );
     report_regressions();
     report_short_inputs();
+    report_mixed_boundaries();
     report_generated_initialisms(0x5a91_c3d7, "development");
     report_generated_initialisms(0xa720_4e91, "held-out");
     if let Some(path) = std::env::args().nth(1) {
-        report_korean_corpus(&path);
+        report_korean_corpus(&path, std::env::args().nth(2).as_deref());
     }
     report_latency();
 }
@@ -68,6 +72,46 @@ fn report_short_inputs() {
     println!(
         "two-letter capitals without a Korean Shift onset across 5 contexts: {correct}/{total}"
     );
+}
+
+fn report_mixed_boundaries() {
+    let mut cases = Vec::new();
+    for prefix in mixed_boundaries::UNREGISTERED_PREFIXES {
+        for (keys, text) in mixed_boundaries::KOREAN_SUFFIXES {
+            cases.push((format!("{prefix}{keys}"), format!("{prefix}{text}")));
+        }
+    }
+    let korean: Vec<_> = mixed_boundaries::KOREAN_WORDS
+        .iter()
+        .map(|(keys, text)| (keys.to_string(), text.to_string()))
+        .collect();
+    let english: Vec<_> = mixed_boundaries::ENGLISH_WORDS
+        .iter()
+        .map(|text| (text.to_string(), text.to_string()))
+        .collect();
+    for (name, cases) in [
+        ("mixed boundaries", cases),
+        ("Korean boundary counterexamples", korean),
+        ("English boundary counterexamples", english),
+    ] {
+        let mut correct = 0;
+        let mut total = 0;
+        let mut misses = Vec::new();
+        for (keys, expected) in cases {
+            for (context_name, context) in CONTEXTS {
+                let actual = decode_after(&keys, context);
+                correct += usize::from(actual == expected);
+                total += 1;
+                if actual != expected && misses.len() < 3 {
+                    misses.push(format!("{context_name}: {expected} → {actual}"));
+                }
+            }
+        }
+        println!("{name} across 5 contexts: {correct}/{total}");
+        for miss in misses {
+            println!("  miss: {miss}");
+        }
+    }
 }
 
 fn report_regressions() {
@@ -132,10 +176,11 @@ fn report_generated_initialisms(mut seed: u64, sample: &str) {
     }
 }
 
-fn report_korean_corpus(path: &str) {
+fn report_korean_corpus(path: &str, snapshot_path: Option<&str>) {
     let source = std::fs::read_to_string(path).expect("held-out Korean corpus");
     let mut results = BTreeMap::<(usize, &str), (usize, usize, Vec<String>)>::new();
-    for line in source.lines() {
+    let mut snapshot = String::new();
+    for (line_number, line) in source.lines().enumerate() {
         let fields: Vec<_> = line.split('\t').collect();
         if fields.len() != 10 || fields[0].parse::<usize>().is_err() {
             continue;
@@ -151,6 +196,9 @@ fn report_korean_corpus(path: &str) {
             .filter(|(name, _)| !name.starts_with("after 1"))
         {
             let actual = decode_after(&keys, context);
+            if snapshot_path.is_some() {
+                snapshot.push_str(&format!("{line_number}\t{name}\t{text}\t{actual}\n"));
+            }
             let (correct, total, examples) = results.entry((syllables, name)).or_default();
             *total += 1;
             *correct += usize::from(actual == text);
@@ -158,6 +206,9 @@ fn report_korean_corpus(path: &str) {
                 examples.push(format!("{text} → {actual}"));
             }
         }
+    }
+    if let Some(path) = snapshot_path {
+        std::fs::write(path, snapshot).expect("write explicit corpus evaluation snapshot");
     }
     for ((syllables, context), (correct, total, examples)) in results {
         let length = if syllables == 1 {

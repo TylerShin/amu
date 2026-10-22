@@ -69,6 +69,16 @@ impl KoreanEvidence {
         self.complete
             && (crate::korean_statistics::contains_observed_syllable(text) || explicit_shift)
     }
+
+    /// A prefix may end mid-syllable. Completed syllables followed by jamo, or
+    /// multiple complete syllables, are reasons not to relabel it as an acronym.
+    pub(crate) fn supports_continuation(&self, keys: &str, text: &str) -> bool {
+        let syllables = text.chars().filter(|c| ('가'..='힣').contains(c)).count();
+        self.supports_reading(keys, text)
+            || self.repeated_jamo
+            || syllables > 1
+            || (syllables == 1 && !self.complete)
+    }
 }
 
 fn has_repeated_jamo(text: &str) -> bool {
