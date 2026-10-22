@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-26]
+        os: [ubuntu-24.04, macos-26, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -45,7 +45,11 @@ jobs:
           mise run workflow:check
           mise run secrets:check
       - name: Rust 포맷·lint·코어·FFI 검사
+        if: runner.os != 'Windows'
         run: mise run check
+      - name: Windows 코어·TSF x64/x86 연결 검사
+        if: runner.os == 'Windows'
+        run: mise run windows:check
       - name: macOS 빌드·서명·AppKit 연결 검사
         if: runner.os == 'macOS'
         run: mise run macos:smoke

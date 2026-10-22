@@ -1,25 +1,30 @@
 use std::{env, path::PathBuf, process::Command};
 
 fn main() {
-    assert_eq!(
-        env::var("HOST").unwrap(),
-        env::var("TARGET").unwrap(),
-        "Cross compilation is not configured yet; build on the target host"
+    let host = env::var("HOST").unwrap();
+    let target = env::var("TARGET").unwrap();
+    assert!(
+        host == target || (host.ends_with("windows-msvc") && target.ends_with("windows-msvc")),
+        "Build on the target OS; Windows builds select the MSVC architecture before invoking Cargo"
     );
     let source = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .join("../../third_party/libhangul");
     let output = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-env-changed=CC");
+    if target_os == "windows" {
+        build_windows(&source, &output);
+        return;
+    }
     let library = output.join(match target_os.as_str() {
         "macos" => "libhangul.dylib",
         "linux" => "libhangul.so",
         _ => {
-            panic!("libhangul build currently supports macOS and Linux; Windows adapter is pending")
+            panic!("libhangul build supports macOS, Linux and Windows MSVC")
         }
     });
 
-    println!("cargo:rerun-if-changed={}", source.display());
-    println!("cargo:rerun-if-env-changed=CC");
     let mut compiler = Command::new(env::var_os("CC").unwrap_or_else(|| "clang".into()));
     compiler.args(["-std=c11", "-O2", "-fPIC", "-DENABLE_EXTERNAL_KEYBOARDS=0"]);
     if target_os == "macos" {
@@ -42,6 +47,35 @@ fn main() {
         status.success(),
         "libhangul shared-library compilation failed"
     );
+    println!("cargo:rustc-link-search=native={}", output.display());
+    println!("cargo:rustc-link-lib=dylib=hangul");
+}
+
+fn build_windows(source: &std::path::Path, output: &std::path::Path) {
+    let exports = output.join("hangul.def");
+    std::fs::write(&exports, "LIBRARY hangul\nEXPORTS\nhangul_ic_new\nhangul_ic_delete\nhangul_ic_process\nhangul_ic_backspace\nhangul_ic_reset\nhangul_ic_get_commit_string\nhangul_ic_get_preedit_string\n").unwrap();
+    let mut compiler = Command::new("cl.exe");
+    compiler.current_dir(output).args([
+        "/nologo",
+        "/std:c11",
+        "/O2",
+        "/LD",
+        "/MD",
+        "/utf-8",
+        "/DENABLE_EXTERNAL_KEYBOARDS=0",
+        "/D_CRT_SECURE_NO_WARNINGS",
+    ]);
+    for file in ["hangulctype.c", "hangulinputcontext.c", "hangulkeyboard.c"] {
+        compiler.arg(source.join(file));
+    }
+    let status = compiler
+        .arg("/Fe:hangul.dll")
+        .arg("/link")
+        .arg(format!("/DEF:{}", exports.display()))
+        .arg("/IMPLIB:hangul.lib")
+        .status()
+        .expect("MSVC is required; run the Windows mise tasks to select the compiler environment");
+    assert!(status.success(), "libhangul DLL compilation failed");
     println!("cargo:rustc-link-search=native={}", output.display());
     println!("cargo:rustc-link-lib=dylib=hangul");
 }
