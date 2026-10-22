@@ -89,10 +89,22 @@ fn report_mixed_boundaries() {
         .iter()
         .map(|text| (text.to_string(), text.to_string()))
         .collect();
+    let connected: Vec<_> = mixed_boundaries::CONNECTED_ENGLISH_WORDS
+        .iter()
+        .map(|text| (text.to_string(), text.to_string()))
+        .collect();
+    let mut extended = Vec::new();
+    for word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+        for (keys, text) in mixed_boundaries::KOREAN_SUFFIXES {
+            extended.push((format!("{word}{keys}"), format!("{word}{text}")));
+        }
+    }
     for (name, cases) in [
         ("mixed boundaries", cases),
         ("Korean boundary counterexamples", korean),
         ("English boundary counterexamples", english),
+        ("unregistered connected English spelling", connected),
+        ("Korean after connected English spelling", extended),
     ] {
         let mut correct = 0;
         let mut total = 0;

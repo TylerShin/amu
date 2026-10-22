@@ -33,3 +33,10 @@ pub const ENGLISH_WORDS: &[&str] = &[
     "hello", "github", "florp", "quirk", "quick", "oxygen", "aims", "vivid", "violin", "violet",
     "quiet", "oxide", "hybrid", "system",
 ];
+
+// Held out from English word hints. Their spelling must survive both word
+// completion and a later, genuine Korean suffix.
+pub const CONNECTED_ENGLISH_WORDS: &[&str] = &[
+    "fallback", "callback", "rollback", "stack", "black", "track", "block", "switch", "catch",
+    "fetch", "scratch", "watch", "patch", "sketch", "dispatch", "packet",
+];

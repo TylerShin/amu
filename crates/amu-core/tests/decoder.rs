@@ -14,6 +14,42 @@ const CONTEXTS: &[&[&str]] = &[
 ];
 
 #[test]
+fn unregistered_english_spelling_survives_composable_endings() {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+        assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            assert_eq!(type_keys(&mut session, word), word, "{context:?}: {word}");
+            assert_eq!(
+                session.process(Input::Backspace).preedit,
+                &word[..word.len() - 1]
+            );
+            assert_eq!(type_keys(&mut session, &word[word.len() - 1..]), word);
+            assert_eq!(session.process(Input::WordBoundary).commit, word);
+            assert!(session.process(Input::Finish).commit.is_empty());
+        }
+    }
+}
+
+#[test]
+fn a_korean_suffix_starts_after_the_complete_english_spelling() {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+        for &(keys, korean) in mixed_boundaries::KOREAN_SUFFIXES {
+            for context in CONTEXTS {
+                let mut session = session_after(context);
+                let expected = format!("{word}{korean}");
+                assert_eq!(
+                    type_keys(&mut session, &format!("{word}{keys}")),
+                    expected,
+                    "{context:?}: {word}{keys}"
+                );
+                assert_eq!(session.process(Input::WordBoundary).commit, expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn unregistered_english_prefixes_compose_korean_suffixes_across_contexts() {
     for prefix in mixed_boundaries::UNREGISTERED_PREFIXES {
         assert!(

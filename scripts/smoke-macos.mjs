@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const sources = ['CoreSession', 'KeyTranslator', 'InputCoordinator', 'Playground'].map((name) => `macos/Sources/${name}.swift`);
+const sources = ['CoreSession', 'KeyTranslator', 'MarkedText', 'InputCoordinator', 'Playground'].map((name) => `macos/Sources/${name}.swift`);
 run('xcrun', ['swiftc', '-swift-version', '5', '-O', ...sources, 'macos/SmokeTest.swift',
   '-import-objc-header', 'include/amu.h', '-L', 'target/release', '-lamu_ffi',
   '-L', 'dist/Amu.app/Contents/Frameworks', '-lhangul', '-framework', 'AppKit',

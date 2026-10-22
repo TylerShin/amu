@@ -87,12 +87,16 @@ impl Decoder {
         unsplit_cost: f32,
         use_capitals: bool,
     ) {
+        let whole_english = english::assess(keys, use_capitals);
         self.probe.reset();
         for boundary in 1..keys.len() {
             self.probe.append(keys.as_bytes()[boundary - 1]);
             let korean_text = self.probe.text();
             let prefix = KoreanEvidence::assess(&korean_text, boundary);
             let suffix = english::assess(&keys[boundary..], use_capitals);
+            if whole_english.connected_spelling && !suffix.word_hint && !suffix.capitals {
+                continue;
+            }
             if prefix.complete && suffix.supports_split {
                 best.consider_split(
                     Candidate {
@@ -144,6 +148,13 @@ impl Decoder {
             if !suffix.complete {
                 continue;
             }
+            if prefix.connected_spelling
+                && !prefix.word_hint
+                && !prefix.capitals
+                && self.continues_english_spelling(keys, boundary, &korean_text)
+            {
+                continue;
+            }
             let evidence = if independent_prefix
                 && independently_reads_korean(suffix_keys, &korean_text, &suffix)
             {
@@ -171,6 +182,28 @@ impl Decoder {
                 unsplit_cost,
             );
         }
+    }
+
+    fn continues_english_spelling(&mut self, keys: &str, boundary: usize, korean: &str) -> bool {
+        let Some(first_syllable) = korean.chars().next() else {
+            return false;
+        };
+        self.probe.reset();
+        // Ask libhangul which prefix produced the first syllable. Once a
+        // second character appears, a one-syllable prefix cannot match again.
+        for (index, key) in keys[boundary..].bytes().enumerate() {
+            self.probe.append(key);
+            let composed = self.probe.text();
+            let mut characters = composed.chars();
+            let first = characters.next();
+            if characters.next().is_some() {
+                return false;
+            }
+            if first == Some(first_syllable) {
+                return english::has_connected_spelling(&keys[..boundary + index + 1]);
+            }
+        }
+        false
     }
 
     fn prefers_english_prefix(&mut self, keys: &str, english: &english::EnglishEvidence) -> bool {

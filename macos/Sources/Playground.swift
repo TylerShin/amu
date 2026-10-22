@@ -95,8 +95,8 @@ final class TypingView: NSTextView, CompositionClient {
         super.cut(sender)
     }
 
-    func mark(_ text: String) {
-        setMarkedText(text, selectedRange: NSRange(location: text.utf16.count, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+    func mark(_ text: MarkedText) {
+        setMarkedText(text.attributedString, selectedRange: text.selectionRange, replacementRange: NSRange(location: NSNotFound, length: 0))
     }
 
     func commit(_ text: String) { insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0)) }

@@ -8,6 +8,7 @@ const INITIAL_CLUSTERS: &[&[u8]] = &[
     b"bl", b"br", b"ch", b"cl", b"cr", b"dr", b"fl", b"fr", b"gl", b"gr", b"ph", b"pl", b"pr",
     b"sc", b"sh", b"sk", b"sl", b"sm", b"sn", b"sp", b"st", b"sw", b"th", b"tr", b"tw", b"wh",
 ];
+const LONG_INITIAL_CLUSTERS: &[&[u8]] = &[b"scr", b"shr", b"spl", b"spr", b"str", b"thr"];
 static MODEL: OnceLock<EnglishModel> = OnceLock::new();
 
 pub(crate) struct EnglishEvidence {
@@ -15,6 +16,7 @@ pub(crate) struct EnglishEvidence {
     pub supports_split: bool,
     pub word_hint: bool,
     pub capitals: bool,
+    pub connected_spelling: bool,
 }
 
 pub(crate) fn initialize() {
@@ -32,8 +34,9 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
         && keys.len() >= 2
         && keys.bytes().all(|key| key.is_ascii_uppercase())
         && keys.bytes().any(|key| !b"REQTWOP".contains(&key));
+    let connected_spelling = model.has_connected_spelling(lowercase.as_bytes());
     let mut cost = model.spelling_cost(lowercase.as_bytes());
-    if has_simple_word_shape(lowercase.as_bytes()) {
+    if has_simple_word_shape(lowercase.as_bytes()) || (keys.len() >= 4 && connected_spelling) {
         cost = cost.min(length * 1.1);
     }
 
@@ -60,7 +63,15 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
         supports_split: keys.len() >= 3 || capitals || (keys.len() >= 2 && word_hint),
         word_hint,
         capitals,
+        connected_spelling,
     }
+}
+
+/// Checks letter continuity without looking up the whole word.
+pub(crate) fn has_connected_spelling(keys: &str) -> bool {
+    MODEL
+        .get_or_init(EnglishModel::train)
+        .has_connected_spelling(keys.to_ascii_lowercase().as_bytes())
 }
 
 fn has_simple_word_shape(keys: &[u8]) -> bool {
@@ -90,14 +101,21 @@ struct EnglishModel {
     transition_costs: [[f32; ALPHABET_SIZE]; ALPHABET_SIZE],
     words: HashSet<&'static str>,
     prefixes: HashSet<&'static str>,
+    codas: HashSet<&'static [u8]>,
 }
 
 impl EnglishModel {
     fn train() -> Self {
         let words: HashSet<_> = WORDS.split_ascii_whitespace().collect();
         let mut prefixes = HashSet::new();
+        let mut codas = HashSet::from([&b""[..]]);
         let mut counts = [[SMOOTHING; ALPHABET_SIZE]; ALPHABET_SIZE];
         for word in &words {
+            let coda_start = word
+                .bytes()
+                .rposition(|key| b"aeiouy".contains(&key))
+                .map_or(0, |index| index + 1);
+            codas.insert(&word.as_bytes()[coda_start..]);
             let mut previous = WORD_EDGE;
             for (index, key) in word.bytes().enumerate() {
                 let current = usize::from(key - b'a');
@@ -118,7 +136,49 @@ impl EnglishModel {
             transition_costs,
             words,
             prefixes,
+            codas,
         }
+    }
+
+    fn has_connected_spelling(&self, keys: &[u8]) -> bool {
+        // Two-letter initialisms do not establish the same continuity as a word.
+        if keys.len() < 3 {
+            return false;
+        }
+        let vowels = keys.iter().filter(|key| b"aeiouy".contains(key)).count();
+        if vowels == 0 || vowels * 5 > keys.len() * 3 {
+            return false;
+        }
+        let mut index = 0;
+        while index < keys.len() {
+            if b"aeiouy".contains(&keys[index]) {
+                index += 1;
+                continue;
+            }
+            let start = index;
+            while index < keys.len() && !b"aeiouy".contains(&keys[index]) {
+                if keys[index] == b'q' && keys.get(index + 1) != Some(&b'u') {
+                    return false;
+                }
+                index += 1;
+            }
+            let cluster = &keys[start..index];
+            let supported = if start == 0 {
+                is_onset(cluster)
+            } else if index == keys.len() {
+                self.codas.contains(cluster)
+            } else {
+                // Compound boundaries can join a coda to another onset. The
+                // component words need not occur in the training vocabulary.
+                (cluster.len().saturating_sub(3)..=cluster.len()).any(|split| {
+                    self.codas.contains(&cluster[..split]) && is_onset(&cluster[split..])
+                })
+            };
+            if !supported {
+                return false;
+            }
+        }
+        true
     }
 
     fn spelling_cost(&self, keys: &[u8]) -> f32 {
@@ -131,4 +191,10 @@ impl EnglishModel {
         }
         cost + self.transition_costs[previous][WORD_EDGE] * 0.25
     }
+}
+
+fn is_onset(cluster: &[u8]) -> bool {
+    cluster.len() <= 1
+        || INITIAL_CLUSTERS.contains(&cluster)
+        || LONG_INITIAL_CLUSTERS.contains(&cluster)
 }

@@ -72,8 +72,8 @@ private final class InputMethodClient: CompositionClient {
 
     init(_ input: IMKTextInput) { self.input = input }
 
-    func mark(_ text: String) {
-        input.setMarkedText(text, selectionRange: NSRange(location: text.utf16.count, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+    func mark(_ text: MarkedText) {
+        input.setMarkedText(text.attributedString, selectionRange: text.selectionRange, replacementRange: NSRange(location: NSNotFound, length: 0))
     }
 
     func commit(_ text: String) {

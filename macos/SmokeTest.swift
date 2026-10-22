@@ -34,12 +34,84 @@ struct SmokeTest {
         verifySpaceKeyPreservesWordBoundary(input)
         verifyShortReadingsAcrossContext(input)
         verifyEnglishFirstBoundaries(input)
+        verifyConnectedEnglishSpelling(input)
+        verifyMarkedTextPresentation()
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, explicit composition style, selection replacement, reentrant finish")
+    }
+
+    private static func verifyConnectedEnglishSpelling(_ input: TypingView) {
+        let korean: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f"), (49, " ")]
+        let english: [(UInt16, String)] = [(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o"), (49, " ")]
+        let contexts = [(0, korean, ""), (4, korean, "한글 "), (4, english, "hello ")]
+        let words: [(String, [(UInt16, String)])] = [
+            ("fallback", [(3, "f"), (0, "a"), (37, "l"), (37, "l"), (11, "b"), (0, "a"), (8, "c"), (40, "k")]),
+            ("rollback", [(15, "r"), (31, "o"), (37, "l"), (37, "l"), (11, "b"), (0, "a"), (8, "c"), (40, "k")]),
+            ("switch", [(1, "s"), (13, "w"), (34, "i"), (17, "t"), (8, "c"), (4, "h")]),
+        ]
+        let suffixes: [(String, [(UInt16, String)])] = [
+            ("", []), ("가", [(15, "r"), (40, "k")]),
+            ("갑사", [(15, "r"), (40, "k"), (12, "q"), (17, "t"), (40, "k")]),
+        ]
+        for (count, context, contextText) in contexts {
+            for (word, keys) in words {
+                for (suffix, suffixKeys) in suffixes {
+                    reset(input)
+                    for _ in 0..<count { press(input, context) }
+                    let before = String(repeating: contextText, count: count)
+                    var partial = ""
+                    for key in keys {
+                        press(input, [key])
+                        partial += key.1
+                        if word == "fallback" {
+                            expect(input.string == before + partial, "fallback must stay Latin at every keystroke")
+                        }
+                    }
+                    expect(input.string == before + word, "The English word must remain intact before its suffix")
+                    press(input, suffixKeys)
+                    let expected = before + word + suffix
+                    expect(input.string == expected && input.hasMarkedText(), "Connected spelling: \(expected), actual: \(input.string)")
+                    if suffix == "갑사" {
+                        press(input, [(51, "\u{7f}")])
+                        expect(input.string == before + word + "갑ㅅ", "Korean deletion must preserve the English spelling")
+                        press(input, [(40, "k")])
+                    }
+                    press(input, [(49, " ")])
+                    expect(input.string == expected + " " && !input.hasMarkedText(), "Space must commit the full word once")
+                }
+            }
+        }
+    }
+
+    private static func verifyMarkedTextPresentation() {
+        let coordinator = InputCoordinator(mode: .korean)
+        let client = PresentationClient()
+        let steps: [(UInt16, String, String)] = [
+            (5, "g", "ㅎ"), (40, "k", "하"), (1, "s", "한"),
+            (15, "r", "한ㄱ"), (46, "m", "한그"), (3, "f", "한글"),
+            (51, "\u{7f}", "한그"), (51, "\u{7f}", "한ㄱ"),
+            (51, "\u{7f}", "한"), (51, "\u{7f}", ""),
+        ]
+        for (code, key, expected) in steps {
+            expect(coordinator.handle(keyEvent(code, key), client: client), "Composition key must be consumed")
+            guard let marked = client.lastMarked else { fatalError("Missing presentation") }
+            expect(marked.attributedString.string == expected, "Styling must preserve every composition step")
+            expect(marked.selectionRange == NSRange(location: expected.utf16.count, length: 0), "Composition caret must remain at the UTF-16 end")
+            marked.attributedString.enumerateAttributes(in: NSRange(location: 0, length: marked.attributedString.length)) { attributes, _, _ in
+                expect(attributes[.underlineStyle] as? Int == NSUnderlineStyle.single.rawValue, "Every composing character needs an explicit underline")
+                expect(attributes[.font] == nil && attributes[.foregroundColor] == nil && attributes[.backgroundColor] == nil, "Composition must inherit the host font and colors")
+            }
+        }
+        expect(client.commits.isEmpty, "Presentation must not commit or split a token while it is edited")
+        _ = coordinator.handle(keyEvent(15, "r"), client: client)
+        _ = coordinator.handle(keyEvent(40, "k"), client: client)
+        coordinator.finish(client: client)
+        coordinator.finish(client: client)
+        expect(client.commits == ["가"], "Commit must remove composition styling without duplicating text")
     }
 
     private static func verifyEnglishFirstBoundaries(_ input: TypingView) {
@@ -205,9 +277,18 @@ private final class ReentrantClient: CompositionClient {
     var commits: [String] = []
 
     init(coordinator: InputCoordinator) { self.coordinator = coordinator }
-    func mark(_ text: String) { coordinator.finish(client: self) }
+    func mark(_ text: MarkedText) { coordinator.finish(client: self) }
     func commit(_ text: String) {
         commits.append(text)
         coordinator.finish(client: self)
     }
+}
+
+@MainActor
+private final class PresentationClient: CompositionClient {
+    var lastMarked: MarkedText?
+    var commits: [String] = []
+
+    func mark(_ text: MarkedText) { lastMarked = text }
+    func commit(_ text: String) { commits.append(text) }
 }

@@ -2,7 +2,7 @@ import AppKit
 
 @MainActor
 protocol CompositionClient: AnyObject {
-    func mark(_ text: String)
+    func mark(_ text: MarkedText)
     func commit(_ text: String)
 }
 
@@ -61,7 +61,7 @@ final class InputCoordinator {
         applying = true
         if !update.commit.isEmpty { client.commit(update.commit) }
         if !update.preedit.isEmpty || (!previouslyMarked.isEmpty && update.commit.isEmpty) {
-            client.mark(update.preedit)
+            client.mark(MarkedText(update.preedit))
         }
         applying = false
         if finishRequested {
