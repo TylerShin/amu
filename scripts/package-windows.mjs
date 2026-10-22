@@ -28,6 +28,8 @@ function main() {
     ['models/korean', 'korean-model'], ['scripts/train-korean-model.mjs', 'korean-model/train-korean-model.mjs'],
     ['docs/libhangul-rebuild-windows.md', 'libhangul-rebuild.md'],
   ]) cpSync(source, resolve(directory, target), { recursive: true });
+  // Windows PowerShell 5.1 needs a BOM to read Korean source as UTF-8.
+  writeFileSync(resolve(directory, 'Install.ps1'), '\ufeff' + readFileSync('windows/Install.ps1', 'utf8'));
   const files = readdirSync(directory, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => {
     const file = resolve(entry.parentPath, entry.name);
     return { path: file.slice(directory.length + 1).replaceAll('\\', '/'), sha256: digest(file) };

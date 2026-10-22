@@ -52,7 +52,7 @@ README의 CI 배지는 첫 실행 결과를 반영한다. GitHub Actions에서 *
 
 - 삭제와 force push 제한.
 - PR을 통한 변경, 미해결 리뷰 대화의 해결.
-- `검증 (ubuntu-24.04)`와 `검증 (macos-26)` 성공을 필수 검사로 지정.
+- `검증 (ubuntu-24.04)`, `검증 (macos-26)`, `검증 (windows-2025)` 성공을 필수 검사로 지정.
 - 운영자의 긴급 수정 우회 경로는 명시적으로 관리하고 사용 이유를 PR에 기록.
 
 단독 운영 단계에서 본인 PR에 다른 사람의 필수 승인을 요구하면 병합이 막힐 수 있으므로 승인 수는 협업 체계가 생긴 뒤 정한다. 보안 설정에서 Dependabot alerts·secret scanning·push protection의 실제 활성 상태를 확인한다. 취약점 제보 연락처는 [SECURITY.md](../SECURITY.md)다.
@@ -75,12 +75,13 @@ CI의 mise 캐시는 비활성화한다. 현재 Rust 백엔드의 실제 toolcha
 
 ## 릴리스
 
-main에 push하면 같은 CI 실행에서 Linux·macOS 검사 → macOS ZIP 패키징 → GitHub 개발 릴리스 공개를 수행한다. `workflow_dispatch`로 main에서 재시도할 수도 있다. PR·fork·다른 브랜치는 공개하지 않는다.
+main에 push하면 같은 CI 실행에서 Linux·macOS·Windows 검사 → macOS·Windows ZIP 패키징 → GitHub 개발 릴리스 공개를 수행한다. `workflow_dispatch`로 main에서 재시도할 수도 있다. PR·fork·다른 브랜치는 공개하지 않는다.
 
-- `verify` 행렬의 모든 검사가 성공해야 `release` 작업이 시작된다. 패키지는 macOS 검사에서 만든 번들을 그대로 사용하며 공개 작업에서 다시 빌드하지 않는다.
+- `verify` 행렬의 모든 검사가 성공해야 `release` 작업이 시작된다. 패키지는 각 OS 검사에서 만든 바이너리를 그대로 사용하며 공개 작업에서 다시 빌드하지 않는다.
 - 태그는 `v0.1.0-dev.<Actions 실행 번호>.<커밋 앞 12자리>` 형식이다. 태그 대상은 이동하는 main 대신 검사한 전체 커밋 SHA로 고정한다.
-- 현재 공개 CPU는 `macos-26` runner의 Apple Silicon이다. 압축 전후 서명, 실행 파일의 CPU, 버전, 필수 라이선스 자료와 SHA-256을 검사한다.
-- Release에는 앱 ZIP, `SHA256SUMS`, `release.json`이 올라간다. 모든 파일을 draft에 올린 후 prerelease로 공개한다. 업로드 실패 시 draft로 남으며 같은 실행을 재시도하면 이어서 공개한다. 이미 공개된 같은 태그는 덮어쓰지 않는다.
+- Windows는 x64·x86 DLL을 함께 묶으며 CI에서 실제 TSF context 검사와 설치·등록·제거를 확인한다. 설치는 버전별 디렉터리에 보관하며 실행 중인 호스트 앱을 종료하지 않는다. [Windows 안내](install-windows.md)를 따른다.
+- 현재 공개 macOS CPU는 `macos-26` runner의 Apple Silicon이다. 압축 전후 서명, 실행 파일의 CPU, 버전, 필수 라이선스 자료와 SHA-256을 검사한다.
+- Release에는 macOS·Windows ZIP, `SHA256SUMS`, `release.json`이 올라간다. 모든 파일을 draft에 올린 후 prerelease로 공개한다. 업로드 실패 시 draft로 남으며 같은 실행을 재시도하면 이어서 공개한다. 이미 공개된 같은 태그는 덮어쓰지 않는다.
 - main의 연속 push는 서로 취소하지 않는다. PR은 새 커밋이 이전 검증을 취소한다. main 실행을 수동 취소하면 해당 실행의 공개는 완료되지 않을 수 있다.
 - 인증서·공증·별도 관리 앱·백그라운드 업데이트는 없다. 일반 다운로드 앱에 적용되는 Gatekeeper 제한과 수동 설치 절차는 [설치 안내](install-release.md)에 명시한다.
 

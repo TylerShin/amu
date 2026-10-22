@@ -24,7 +24,7 @@ HRESULT TextStore::RequestLock(DWORD flags, HRESULT* result) {
     lock_ = 0;
     return S_OK;
 }
-HRESULT TextStore::GetStatus(TS_STATUS* status) { *status = {readOnly ? TS_SD_READONLY : 0, 0}; return S_OK; }
+HRESULT TextStore::GetStatus(TS_STATUS* status) { *status = {readOnly ? static_cast<DWORD>(TS_SD_READONLY) : 0u, 0}; return S_OK; }
 HRESULT TextStore::QueryInsert(LONG first, LONG last, ULONG, LONG* begin, LONG* finish) {
     if (first < 0 || last < first || last > static_cast<LONG>(text.size())) return TS_E_INVALIDPOS;
     *begin = first; *finish = last; return S_OK;
@@ -36,7 +36,7 @@ HRESULT TextStore::GetSelection(ULONG index, ULONG count, TS_SELECTION_ACP* sele
     *selection = {start, end, {TS_AE_END, FALSE}}; *fetched = 1; return S_OK;
 }
 HRESULT TextStore::SetSelection(ULONG count, const TS_SELECTION_ACP* selection) {
-    if (!(lock_ & TS_LF_READWRITE)) return TS_E_NOLOCK;
+    if ((lock_ & TS_LF_READWRITE) != TS_LF_READWRITE) return TS_E_NOLOCK;
     if (count != 1) return E_INVALIDARG;
     start = selection->acpStart; end = selection->acpEnd; return S_OK;
 }

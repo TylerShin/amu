@@ -17,6 +17,7 @@ function Invoke-AmuInstaller {
         $state = Get-Content -Raw $statePath | ConvertFrom-Json
         Assert-InstalledPath $state.directory $root
         Confirm-Version $state.directory $state.identifier
+        Confirm-Registration $state.directory
         Write-Output ('등록된 버전: ' + $state.identifier)
         Write-Output '이미 실행 중인 앱은 이전 DLL을 유지할 수 있습니다. 업데이트 후 로그아웃·로그인하세요.'
         return
@@ -33,10 +34,18 @@ function Invoke-AmuInstaller {
             $previous = Get-Content -Raw $statePath | ConvertFrom-Json
             Assert-InstalledPath $previous.directory $root
         }
+        $originalLanguages = $null
+        if (-not $SkipLanguageSetup) { $originalLanguages = Get-WinUserLanguageList }
         if ($Action -eq 'Uninstall') {
             if ($null -eq $previous) { throw '설치된 Amu가 없습니다.' }
-            Register-Package $previous.directory -Remove
-            if (-not $SkipLanguageSetup) { Update-LanguageList -Remove }
+            try {
+                Register-Package $previous.directory -Remove
+                if (-not $SkipLanguageSetup) { Update-LanguageList -Remove }
+            } catch {
+                Register-Package $previous.directory
+                if ($null -ne $originalLanguages) { Set-WinUserLanguageList $originalLanguages -Force }
+                throw
+            }
             Remove-Item $statePath
             Write-Output 'Amu 등록을 제거했습니다. 실행 중인 앱을 보호하기 위해 버전 파일은 보존했습니다.'
             Write-Output ('로그아웃·로그인 후 삭제 가능한 폴더: ' + $root)
@@ -48,18 +57,25 @@ function Invoke-AmuInstaller {
         $destination = Join-Path $root ('versions\' + $manifest.identifier)
         Assert-InstalledPath $destination $root
         if (-not (Test-Path $destination)) {
-            New-Item -ItemType Directory -Force $destination | Out-Null
-            foreach ($file in $manifest.files) {
-                $target = Join-Path $destination $file.path
-                New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
-                Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file.path) -Destination $target
-            }
-            Copy-Item (Join-Path $PSScriptRoot 'package.json') $destination
+            $staging = Join-Path $root ('versions\.staging-' + [Guid]::NewGuid().ToString())
+            New-Item -ItemType Directory -Force $staging | Out-Null
+            try {
+                foreach ($file in $manifest.files) {
+                    $target = Join-Path $staging $file.path
+                    New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
+                    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file.path) -Destination $target
+                }
+                Copy-Item (Join-Path $PSScriptRoot 'package.json') $staging
+                Confirm-Package $staging $manifest
+                Confirm-Version $staging $manifest.identifier
+                [IO.Directory]::Move($staging, $destination)
+            } finally { if (Test-Path $staging) { Remove-Item -Recurse -Force $staging } }
         }
         Confirm-Package $destination $manifest
         Confirm-Version $destination $manifest.identifier
         try {
             Register-Package $destination
+            Confirm-Registration $destination
             if (-not $SkipLanguageSetup) { Update-LanguageList }
             $state = @{ identifier = $manifest.identifier; directory = $destination }
             $temporary = Join-Path $root 'active.pending.json'
@@ -70,6 +86,7 @@ function Invoke-AmuInstaller {
             $failure = $_
             if ($null -ne $previous) { Register-Package $previous.directory }
             else { Register-Package $destination -Remove }
+            if ($null -ne $originalLanguages) { Set-WinUserLanguageList $originalLanguages -Force }
             throw $failure
         }
         Write-Output ('설치·등록 확인 완료: ' + $manifest.identifier)
@@ -113,19 +130,23 @@ function Register-Package([string]$Directory, [switch]$Remove) {
         if ($Remove) { $arguments = @('/s', '/u', ('"' + $library + '"')) }
         $process = Start-Process -FilePath $tool -ArgumentList $arguments -Wait -PassThru
         if ($process.ExitCode -ne 0) { throw ('TSF 등록 변경 실패: ' + $architecture + ', ' + $process.ExitCode) }
-        if (-not $Remove) {
-            $view = [Microsoft.Win32.RegistryView]::Registry64
-            if ($architecture -eq 'x86') { $view = [Microsoft.Win32.RegistryView]::Registry32 }
-            $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', $view)
-            try {
-                $key = $registry.OpenSubKey('SOFTWARE\Classes\CLSID\{991ABF87-12A1-4F5C-A9CC-800724AD3AF3}\InprocServer32')
-                if ($null -eq $key) { throw '등록된 COM 서버를 찾지 못했습니다.' }
-                try { if ($key.GetValue('') -ne $library) { throw '등록된 DLL 경로가 다릅니다.' } }
-                finally { $key.Dispose() }
-            } finally { $registry.Dispose() }
-        }
     }
 }
+function Confirm-Registration([string]$Directory) {
+    foreach ($architecture in @('x64', 'x86')) {
+        $library = Join-Path $Directory ($architecture + '\Amu.dll')
+        $view = [Microsoft.Win32.RegistryView]::Registry64
+        if ($architecture -eq 'x86') { $view = [Microsoft.Win32.RegistryView]::Registry32 }
+        $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', $view)
+        try {
+            $key = $registry.OpenSubKey('SOFTWARE\Classes\CLSID\{991ABF87-12A1-4F5C-A9CC-800724AD3AF3}\InprocServer32')
+            if ($null -eq $key) { throw '등록된 COM 서버를 찾지 못했습니다.' }
+            try { if ($key.GetValue('') -ne $library) { throw '등록된 DLL 경로가 다릅니다.' } }
+            finally { $key.Dispose() }
+        } finally { $registry.Dispose() }
+    }
+}
+
 function Update-LanguageList([switch]$Remove) {
     $tip = '0412:{991ABF87-12A1-4F5C-A9CC-800724AD3AF3}{19CCE201-BAF0-4A9D-A171-F3384BBB4F69}'
     $languages = Get-WinUserLanguageList

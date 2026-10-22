@@ -173,13 +173,13 @@ Shift·반복 자모 보존 전에는 평가용 소문자 447/600, 대문자 594
 
 Telegram macOS 앱에서 자동·고정 한글 모드 모두 떨림·잔상이 보고되었고, 사용자가 같은 앱의 기본 한국어 입력기에서는 정상임을 확인했다. 조합 서식 변경은 이 문제의 비교용 수정이며 실제 앱의 개선 여부는 아직 확인하지 않았다. 별도로 자동 판독 중 `한 → gksr → 한그 → 한글`처럼 다음 음절의 초성을 영문으로 잠시 재해석하는 현상이 재현된다. 현재 회귀 검사의 완성 단어 정확도와 이 중간 표시의 안정성은 별개이며, 이번 서식 변경은 중간 판독을 수정하지 않는다.
 
-Windows TSF·Linux 입력기 연결과 cross compilation은 아직 없다. Rust 도메인 로직은 OS와 분리되어 있지만 현재 빌드 스크립트는 호스트 clang으로 native 빌드한다. macOS 번들은 개발용 ad-hoc 서명이며 공증·자동 업데이트를 포함하지 않는다.
+Windows TSF 레이어는 같은 C ABI를 사용하며 x64·x86 MSVC 빌드를 제공한다. 키 번역, 코어 수명, 조합 범위 편집, COM 등록을 분리한다. Windows 안에서 x64·x86 대상을 빌드하며 다른 OS에서 Windows로 cross compilation하지 않는다. Linux 입력기 연결은 아직 없다. [Windows 설치·검증 범위](install-windows.md)를 참고한다. macOS 번들은 개발용 ad-hoc 서명이며 공증·자동 업데이트를 포함하지 않는다.
 
 ## 빌드·설치 유지보수
 
 - mise로 Rust 1.99.1, rustfmt/clippy, Node 22.22.1을 고정한다. Swift/SDK는 Xcode에서 공급한다.
-- Cargo.lock을 포함하고 빌드·검사에 `--locked`를 사용한다. 현재 Rust 외부 crate 의존성은 없다.
-- libhangul 소스는 지정 revision의 조합 관련 7개 파일을 수정 없이 포함한다. `COPYING`과 출처를 유지하고 별도 dylib로 배포한다.
+- Cargo.lock을 포함하고 빌드·검사에 `--locked`를 사용한다. 현재 Rust 외부 crate 의존성은 없다. Windows C++ 연결부는 MSVC와 Windows SDK를 사용한다.
+- libhangul 소스는 지정 revision의 조합 관련 7개 파일을 수정 없이 포함한다. `COPYING`과 출처를 유지하고 별도 공유 라이브러리(dylib/DLL)로 배포한다.
 - 빌드는 새 디렉터리에서 서명·검증한 뒤 기존 번들과 교체한다. 실행 중인 앱의 바이너리 파일을 덮어쓰지 않는다. 기존 빌드는 `dist/.previous/`에 남는다.
 - 설치 시 동일 식별자의 기존 앱은 `~/Library/Application Support/Amu/backups/`에 보존한다. 다른 식별자의 동명 앱은 덮어쓰지 않는다.
 - `mise run macos:install`은 빌드·백업·교체 후 정상 종료·시작과 실행 버전 응답을 확인한다. 설치 전 다른 입력기로 전환한다. Amu가 선택되어 있거나 조합이 남아 있으면 종료를 거부하며 다른 입력기나 시스템 서비스를 종료하지 않는다.
