@@ -73,6 +73,7 @@ HRESULT Composition::write(ITfContext* context, TfEditCookie cookie, ITfComposit
     if (displayed_ != text || text.empty()) {
         result = range->SetText(cookie, 0, text.data(), static_cast<LONG>(text.size()));
         if (FAILED(result)) return result;
+        ++writes_;
         displayed_ = text;
     }
     ComPtr<ITfProperty> property;

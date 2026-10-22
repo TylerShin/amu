@@ -30,7 +30,7 @@ function buildArchitecture(architecture, directory) {
   const sources = readdirSync(resolve(ROOT, 'windows/src')).filter((file) => file.endsWith('.cpp')).map((file) => resolve(ROOT, 'windows/src', file));
   const flags = ['/nologo', '/std:c++17', '/EHsc', '/O2', '/MD', '/W4', '/WX', '/utf-8', '/DUNICODE', '/D_UNICODE', '/D_WIN32_WINNT=0x0A00', `/I${resolve(ROOT, 'include')}`, `/I${resolve(ROOT, 'windows/src')}`, `/I${directory}`];
   const libraries = [resolve(ROOT, 'target', target, 'release/amu_ffi.lib'), resolve(native.out_dir, 'hangul.lib'),
-    'msctf.lib', 'ole32.lib', 'oleaut32.lib', 'uuid.lib', 'user32.lib', 'advapi32.lib', 'delayimp.lib',
+    'ole32.lib', 'oleaut32.lib', 'uuid.lib', 'user32.lib', 'advapi32.lib', 'delayimp.lib',
     'ws2_32.lib', 'userenv.lib', 'bcrypt.lib', 'ntdll.lib', 'synchronization.lib'];
   runWindows('cl.exe', [...flags, '/LD', ...sources, '/Fe:Amu.dll', '/link', `/DEF:${resolve(ROOT, 'windows/Amu.def')}`, '/DELAYLOAD:hangul.dll', ...libraries], { env, cwd: destination });
   const testSources = ['windows/tests/smoke.cpp', 'windows/tests/text_store.cpp', 'windows/src/core_session.cpp', 'windows/src/key_input.cpp', 'windows/src/dependency_loader.cpp'].map((file) => resolve(ROOT, file));

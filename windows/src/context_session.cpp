@@ -79,8 +79,10 @@ HRESULT ContextSession::edit(TfEditCookie cookie, CoreInput input, bool& consume
         composition_.finish(cookie);
         return result;
     }
+    auto writesBefore = composition_.writes();
     result = composition_.apply(context_.Get(), cookie, this, attribute_, update);
     if (FAILED(result)) {
+        consumed = update.consumed && composition_.writes() != writesBefore;
         // Stop editing this context after a host failure; retain the host's current text.
         enabled_ = false;
         core_.reset();

@@ -57,6 +57,17 @@ jobs:
         if: runner.os == 'macOS'
         # 다시 빌드하지 않고 위에서 검사한 번들을 압축한다.
         run: mise exec -- node scripts/package-macos.mjs
+      - name: 검사한 Windows 입력기 패키징·설치·제거 검사
+        if: runner.os == 'Windows'
+        run: mise exec -- node scripts/package-windows.mjs
+      - name: Windows Release 패키지 보관
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release
+          path: dist/release-windows/
+          if-no-files-found: error
+          retention-days: 14
       - name: Release 패키지 보관
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -87,8 +98,8 @@ jobs:
       - name: 같은 실행의 검사된 패키지 받기
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: macos-release
-          path: dist/release/
+          pattern: "*-release"
+          path: dist/release-input/
       - name: 체크섬 확인 후 개발 릴리스 공개
         env:
           GH_TOKEN: ${{ github.token }}

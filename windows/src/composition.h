@@ -6,6 +6,7 @@ namespace amu {
 class Composition {
 public:
     bool active() const { return composition_ != nullptr; }
+    uint64_t writes() const { return writes_; }
     HRESULT apply(ITfContext* context, TfEditCookie cookie, ITfCompositionSink* sink,
         TfGuidAtom attribute, const CompositionUpdate& update);
     HRESULT finish(TfEditCookie cookie);
@@ -17,5 +18,6 @@ private:
         TfGuidAtom attribute, const std::wstring& text);
     ComPtr<ITfComposition> composition_;
     std::wstring displayed_;
+    uint64_t writes_ = 0;
 };
 }
