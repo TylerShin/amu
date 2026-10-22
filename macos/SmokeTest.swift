@@ -32,12 +32,42 @@ struct SmokeTest {
         verifyUnregisteredSuffixAndContext(input)
         verifyShiftAndRepeatedJamo(input)
         verifySpaceKeyPreservesWordBoundary(input)
+        verifyShortReadingsAcrossContext(input)
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, selection replacement, reentrant finish")
+    }
+
+    private static func verifyShortReadingsAcrossContext(_ input: TypingView) {
+        let korean: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f"), (49, " ")]
+        let english: [(UInt16, String)] = [(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o"), (49, " ")]
+        let contexts = [(0, korean, ""), (1, korean, "한글 "), (4, korean, "한글 "), (1, english, "hello "), (4, english, "hello ")]
+        let readings: [([(UInt16, String)], String)] = [
+            ([(0, "a"), (34, "i")], "ai"),
+            ([(0, "A"), (34, "I")], "AI"),
+            ([(0, "A"), (34, "i")], "Ai"),
+            ([(0, "a"), (34, "I")], "aI"),
+            ([(9, "v"), (34, "i")], "vi"),
+            ([(12, "q"), (34, "i")], "qi"),
+            ([(15, "r"), (40, "k")], "가"),
+            ([(2, "d"), (31, "O")], "얘"),
+            ([(9, "v"), (38, "j"), (0, "a")], "펌"),
+            ([(6, "z"), (45, "n"), (15, "r")], "쿡"),
+        ]
+        for (count, context, contextText) in contexts {
+            for (keys, reading) in readings {
+                reset(input)
+                for _ in 0..<count { press(input, context) }
+                let expected = String(repeating: contextText, count: count) + reading
+                press(input, keys)
+                expect(input.string == expected && input.hasMarkedText(), "Short reading before Space: \(expected), actual: \(input.string)")
+                press(input, [(49, " ")])
+                expect(input.string == expected + " " && !input.hasMarkedText(), "Short reading must commit once: \(expected)")
+            }
+        }
     }
 
     private static func verifySpaceKeyPreservesWordBoundary(_ input: TypingView) {

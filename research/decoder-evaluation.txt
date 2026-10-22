@@ -1,10 +1,14 @@
-cold session/model initialization: 5.37ms
+cold session/model initialization: 1.86ms
 regression english: 16/16
 regression english-first: 4/4
 regression korean: 52/52
 regression korean-expression: 8/8
+regression korean-single: 16/16
 regression novel-english: 12/12
 regression novel-mixed: 12/12
+regression short-english: 10/10
+short Latin/Korean fixtures across 5 contexts: 130/130
+two-letter capitals without a Korean Shift onset across 5 contexts: 2470/2470
 development generated lowercase: 421/600 intended Latin suffixes preserved
   miss: 삼성xmx → 삼성틑
   miss: 설정xmx → 설정틑
@@ -41,6 +45,23 @@ held-out generated uppercase: 588/600 intended Latin suffixes preserved
   miss: 엔진PTP → 엔지녜쎼
   miss: 삼성WJDL → 삼성쩌이
   miss: 설정WJDL → 설정쩌이
-held-out Korean FORM tokens (2+ syllables, neutral context): 8747/8747 preserved
-release core fixture keys: n=62900, p50=0.5µs p95=2.8µs p99=3.9µs
-release core 64-key token: n=6400, p50=28.0µs p95=96.3µs p99=113.8µs
+held-out Korean FORM tokens (1 syllable, after 4 English words): 865/878 preserved
+  miss: 새 → to
+  miss: 새 → to
+  miss: 새 → to
+held-out Korean FORM tokens (1 syllable, after 4 Korean words): 878/878 preserved
+held-out Korean FORM tokens (1 syllable, neutral): 865/878 preserved
+  miss: 새 → to
+  miss: 새 → to
+  miss: 새 → to
+held-out Korean FORM tokens (2+ syllables, after 4 English words): 8733/8747 preserved
+  miss: 해체되었다 → go체되었다
+  miss: 내에서 → so에서
+  miss: 해산되었다 → go산되었다
+held-out Korean FORM tokens (2+ syllables, after 4 Korean words): 8743/8747 preserved
+  miss: 포함해 → 포함go
+  miss: 참여해 → 참여go
+  miss: 증가해 → 증가go
+held-out Korean FORM tokens (2+ syllables, neutral): 8747/8747 preserved
+release core fixture keys: n=68500, p50=0.2µs p95=2.9µs p99=4.2µs
+release core 64-key token: n=6400, p50=28.5µs p95=98.1µs p99=113.8µs

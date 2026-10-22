@@ -2,6 +2,92 @@ use amu_core::{Input, Mode, Session};
 
 const CASES: &str = include_str!("fixtures/decoder.tsv");
 const WORD_HINTS: &str = include_str!("../src/english-seed.txt");
+const CONTEXTS: &[&[&str]] = &[
+    &[],
+    &["gksrmf"],
+    &["gksrmf", "gksrmf", "gksrmf", "gksrmf"],
+    &["hello"],
+    &["hello", "hello", "hello", "hello"],
+];
+
+#[test]
+fn short_readings_survive_case_context_and_editing_boundaries() {
+    for line in CASES
+        .lines()
+        .filter(|line| line.starts_with("short-english\t") || line.starts_with("korean-single\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let keys = fields[1];
+        let expected = fields[2];
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            assert_eq!(
+                type_keys(&mut session, keys),
+                expected,
+                "{context:?}: {keys}"
+            );
+            assert_eq!(session.process(Input::WordBoundary).commit, expected);
+            assert!(session.process(Input::Finish).commit.is_empty());
+        }
+    }
+    for keys in ["ai", "AI", "Ai", "aI"] {
+        let mut session = session_after(&["gksrmf", "gksrmf"]);
+        assert_eq!(type_keys(&mut session, keys), keys);
+        assert_eq!(session.process(Input::Backspace).preedit, &keys[..1]);
+        assert_eq!(type_keys(&mut session, &keys[1..]), keys);
+        assert_eq!(session.process(Input::Finish).commit, keys);
+    }
+}
+
+#[test]
+fn context_cannot_override_two_letter_capitals_without_a_korean_shift_onset() {
+    // Exhaust the 494 pairs with no possible tense-consonant/shifted-vowel
+    // onset. Pairs such as RK remain ambiguous with intentional Korean Shift.
+    for first in b'A'..=b'Z' {
+        if b"REQTWOP".contains(&first) {
+            continue;
+        }
+        for second in b'A'..=b'Z' {
+            let keys = String::from_utf8(vec![first, second]).unwrap();
+            for context in CONTEXTS {
+                let mut session = session_after(context);
+                assert_eq!(type_keys(&mut session, &keys), keys, "{context:?}");
+                assert_eq!(session.process(Input::WordBoundary).commit, keys);
+            }
+        }
+    }
+}
+
+#[test]
+fn capital_segments_and_korean_shift_overlap_survive_opposing_context() {
+    for context in CONTEXTS {
+        for (keys, expected) in [
+            ("AIgksrmf", "AI한글"),
+            ("gksrmfAI", "한글AI"),
+            ("AIrk", "AI가"),
+            ("djEjfRK", "어떨까"),
+            ("qjfTJ", "벌써"),
+            ("dkRK", "아까"),
+        ] {
+            let mut session = session_after(context);
+            assert_eq!(
+                type_keys(&mut session, keys),
+                expected,
+                "{context:?}: {keys}"
+            );
+            assert_eq!(session.process(Input::WordBoundary).commit, expected);
+        }
+    }
+}
+
+#[test]
+fn explicit_modes_preserve_both_intentions_for_the_same_ambiguous_keys() {
+    for (mode, expected) in [(Mode::Korean, "먀"), (Mode::English, "ai")] {
+        let mut session = Session::new(mode).unwrap();
+        assert_eq!(type_keys(&mut session, "ai"), expected);
+        assert_eq!(session.process(Input::Finish).commit, expected);
+    }
+}
 
 #[test]
 fn unseen_abbreviations_and_normal_text_are_decoded_together() {
@@ -185,4 +271,13 @@ fn type_keys(session: &mut Session, keys: &str) -> String {
         shown = session.process(Input::Letter(key)).preedit;
     }
     shown
+}
+
+fn session_after(words: &[&str]) -> Session {
+    let mut session = Session::new(Mode::Auto).unwrap();
+    for keys in words {
+        type_keys(&mut session, keys);
+        session.process(Input::WordBoundary);
+    }
+    session
 }

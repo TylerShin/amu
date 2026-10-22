@@ -60,6 +60,15 @@ impl KoreanEvidence {
             || self.repeated_jamo
             || crate::korean_statistics::contains_only_observed_syllables(text)
     }
+
+    /// Composability alone is not language evidence. Corpus coverage or an explicit
+    /// shifted Korean key can support an otherwise unfamiliar whole reading.
+    pub(crate) fn supports_reading(&self, keys: &str, text: &str) -> bool {
+        let explicit_shift = keys.bytes().any(|key| key.is_ascii_lowercase())
+            && keys.bytes().any(|key| b"REQTWOP".contains(&key));
+        self.complete
+            && (crate::korean_statistics::contains_observed_syllable(text) || explicit_shift)
+    }
 }
 
 fn has_repeated_jamo(text: &str) -> bool {

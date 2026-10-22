@@ -12,7 +12,6 @@ pub(crate) fn initialize() {
 }
 
 /// Rates local syllable context at a proposed language boundary.
-/// Whole, ordinary Korean remains the conservative fallback in the decoder.
 pub(crate) fn boundary_cost(text: &str) -> f32 {
     let model = MODEL.get_or_init(SyllableModel::load);
     let mut previous = None;
@@ -52,6 +51,14 @@ pub(crate) fn boundary_cost(text: &str) -> f32 {
 pub(crate) fn contains_only_observed_syllables(text: &str) -> bool {
     let model = MODEL.get_or_init(SyllableModel::load);
     text.chars().all(|character| {
+        ('가'..='힣').contains(&character)
+            && model.unigrams[character as usize - 0xac00] < UNKNOWN_COST
+    })
+}
+
+pub(crate) fn contains_observed_syllable(text: &str) -> bool {
+    let model = MODEL.get_or_init(SyllableModel::load);
+    text.chars().any(|character| {
         ('가'..='힣').contains(&character)
             && model.unigrams[character as usize - 0xac00] < UNKNOWN_COST
     })

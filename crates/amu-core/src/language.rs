@@ -6,6 +6,9 @@ use crate::{
 const LANGUAGE_SWITCH_COST: f32 = 2.0;
 const SPLIT_CONFIDENCE_MARGIN: f32 = 0.75;
 const CAPITAL_BOUNDARY_BONUS: f32 = 3.0;
+// Missing corpus coverage is weak evidence: it can resolve a minimal open
+// syllable, but must not outweigh an additional composed consonant by itself.
+const UNSUPPORTED_KOREAN_COST: f32 = 1.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
@@ -52,7 +55,7 @@ impl Decoder {
         if korean_evidence.repeated_jamo && !use_capitals {
             return Reading::Korean;
         }
-        let mut best = unsplit_candidate(keys, &korean_evidence, context, use_capitals);
+        let mut best = unsplit_candidate(keys, korean, &korean_evidence, context, use_capitals);
         if keys.len() < 4 {
             return best.reading;
         }
@@ -139,34 +142,42 @@ impl Decoder {
 
 fn unsplit_candidate(
     keys: &str,
+    korean: &str,
     korean_evidence: &KoreanEvidence,
     context: &RecentContext,
     use_capitals: bool,
 ) -> Candidate {
     let english_evidence = english::assess(keys, use_capitals);
-    let use_context = !korean_evidence.complete || english_evidence.short_word_or_capitals;
+    let has_korean_support = korean_evidence.supports_reading(keys, korean);
+    // Context resolves competing word evidence. It cannot manufacture Korean
+    // evidence or erase capitals that Korean Shift usage does not explain.
+    let use_context =
+        has_korean_support && english_evidence.word_hint && !english_evidence.capitals;
+    let coverage_cost = if korean_evidence.complete && !has_korean_support {
+        UNSUPPORTED_KOREAN_COST
+    } else {
+        0.0
+    };
     let mut best = Candidate {
         reading: Reading::Korean,
         cost: korean_evidence.cost
+            + coverage_cost
             + if use_context {
                 context.cost(Language::Korean)
             } else {
                 0.0
             },
     };
-    // An unfamiliar abbreviation's shape alone cannot disprove complete,
-    // structurally ordinary Korean. Preserve that reading when ambiguous.
-    if !korean_evidence.ordinary || english_evidence.short_word_or_capitals {
-        best.consider(Candidate {
-            reading: Reading::English,
-            cost: english_evidence.cost
-                + if use_context {
-                    context.cost(Language::English)
-                } else {
-                    0.0
-                },
-        });
-    }
+    // Always compare both readings; structural validity must not veto Latin.
+    best.consider(Candidate {
+        reading: Reading::English,
+        cost: english_evidence.cost
+            + if use_context {
+                context.cost(Language::English)
+            } else {
+                0.0
+            },
+    });
     best
 }
 
@@ -191,7 +202,12 @@ fn mixed_cost(
     } else {
         crate::korean_statistics::boundary_cost(text)
     };
-    korean.cost + english.cost + LANGUAGE_SWITCH_COST + boundary_cost + context_cost * 0.5
+    let prior = if english.capitals {
+        0.0
+    } else {
+        context_cost * 0.5
+    };
+    korean.cost + english.cost + LANGUAGE_SWITCH_COST + boundary_cost + prior
 }
 
 struct Candidate {

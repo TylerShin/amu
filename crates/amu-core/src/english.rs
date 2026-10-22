@@ -13,7 +13,7 @@ static MODEL: OnceLock<EnglishModel> = OnceLock::new();
 pub(crate) struct EnglishEvidence {
     pub cost: f32,
     pub supports_split: bool,
-    pub short_word_or_capitals: bool,
+    pub word_hint: bool,
     pub capitals: bool,
 }
 
@@ -26,7 +26,8 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     let model = MODEL.get_or_init(EnglishModel::train);
     let lowercase = keys.to_ascii_lowercase();
     let length = keys.len() as f32;
-    let word_hint = model.words.contains(lowercase.as_str());
+    // A case-folded dictionary match must not erase meaningful Korean Shift.
+    let word_hint = model.words.contains(lowercase.as_str()) && (use_capitals || keys == lowercase);
     let capitals = use_capitals
         && keys.len() >= 2
         && keys.bytes().all(|key| key.is_ascii_uppercase())
@@ -38,7 +39,7 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
 
     // A short initialism need not resemble a pronounceable English word.
     // This depends only on shape, never on a list of registered abbreviations.
-    if (3..=6).contains(&keys.len()) && !keys.bytes().all(|key| key == keys.as_bytes()[0]) {
+    if (2..=6).contains(&keys.len()) && !keys.bytes().all(|key| key == keys.as_bytes()[0]) {
         let vowels = lowercase
             .bytes()
             .filter(|key| b"aeiou".contains(key))
@@ -57,7 +58,7 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     EnglishEvidence {
         cost,
         supports_split: keys.len() >= 3 || capitals || (keys.len() >= 2 && word_hint),
-        short_word_or_capitals: word_hint || capitals,
+        word_hint,
         capitals,
     }
 }

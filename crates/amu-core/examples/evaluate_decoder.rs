@@ -12,6 +12,13 @@ const PREFIXES: &[(&str, &str)] = &[
     ("ahepf", "모델"),
     ("dpswls", "엔진"),
 ];
+const CONTEXTS: &[(&str, &[&str])] = &[
+    ("neutral", &[]),
+    ("after 1 Korean word", &["gksrmf"]),
+    ("after 4 Korean words", &["gksrmf"; 4]),
+    ("after 1 English word", &["hello"]),
+    ("after 4 English words", &["hello"; 4]),
+];
 
 fn main() {
     let started = Instant::now();
@@ -21,12 +28,46 @@ fn main() {
         started.elapsed().as_secs_f64() * 1000.0
     );
     report_regressions();
+    report_short_inputs();
     report_generated_initialisms(0x5a91_c3d7, "development");
     report_generated_initialisms(0xa720_4e91, "held-out");
     if let Some(path) = std::env::args().nth(1) {
         report_korean_corpus(&path);
     }
     report_latency();
+}
+
+fn report_short_inputs() {
+    let mut correct = 0;
+    let mut total = 0;
+    for line in FIXTURES
+        .lines()
+        .filter(|line| line.starts_with("short-english\t") || line.starts_with("korean-single\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        for (_, context) in CONTEXTS {
+            correct += usize::from(decode_after(fields[1], context) == fields[2]);
+            total += 1;
+        }
+    }
+    println!("short Latin/Korean fixtures across 5 contexts: {correct}/{total}");
+    correct = 0;
+    total = 0;
+    for first in b'A'..=b'Z' {
+        if b"REQTWOP".contains(&first) {
+            continue;
+        }
+        for second in b'A'..=b'Z' {
+            let keys = String::from_utf8(vec![first, second]).unwrap();
+            for (_, context) in CONTEXTS {
+                correct += usize::from(decode_after(&keys, context) == keys);
+                total += 1;
+            }
+        }
+    }
+    println!(
+        "two-letter capitals without a Korean Shift onset across 5 contexts: {correct}/{total}"
+    );
 }
 
 fn report_regressions() {
@@ -93,30 +134,41 @@ fn report_generated_initialisms(mut seed: u64, sample: &str) {
 
 fn report_korean_corpus(path: &str) {
     let source = std::fs::read_to_string(path).expect("held-out Korean corpus");
-    let mut total = 0;
-    let mut correct = 0;
-    let mut examples = Vec::new();
+    let mut results = BTreeMap::<(usize, &str), (usize, usize, Vec<String>)>::new();
     for line in source.lines() {
         let fields: Vec<_> = line.split('\t').collect();
         if fields.len() != 10 || fields[0].parse::<usize>().is_err() {
             continue;
         }
         let text = fields[1];
-        if text.chars().count() < 2 || !text.chars().all(|c| ('가'..='힣').contains(&c)) {
+        if text.is_empty() || !text.chars().all(|c| ('가'..='힣').contains(&c)) {
             continue;
         }
-        let actual = decode(&korean_keys(text));
-        total += 1;
-        correct += usize::from(actual == text);
-        if actual != text && examples.len() < 8 {
-            examples.push(format!("{text} → {actual}"));
+        let syllables = text.chars().count().min(2);
+        let keys = korean_keys(text);
+        for (name, context) in CONTEXTS
+            .iter()
+            .filter(|(name, _)| !name.starts_with("after 1"))
+        {
+            let actual = decode_after(&keys, context);
+            let (correct, total, examples) = results.entry((syllables, name)).or_default();
+            *total += 1;
+            *correct += usize::from(actual == text);
+            if actual != text && examples.len() < 3 {
+                examples.push(format!("{text} → {actual}"));
+            }
         }
     }
-    println!(
-        "held-out Korean FORM tokens (2+ syllables, neutral context): {correct}/{total} preserved"
-    );
-    for example in examples {
-        println!("  miss: {example}");
+    for ((syllables, context), (correct, total, examples)) in results {
+        let length = if syllables == 1 {
+            "1 syllable"
+        } else {
+            "2+ syllables"
+        };
+        println!("held-out Korean FORM tokens ({length}, {context}): {correct}/{total} preserved");
+        for example in examples {
+            println!("  miss: {example}");
+        }
     }
 }
 
@@ -178,7 +230,17 @@ fn report_latency() {
 }
 
 fn decode(keys: &str) -> String {
+    decode_after(keys, &[])
+}
+
+fn decode_after(keys: &str, context: &[&str]) -> String {
     let mut session = Session::new(Mode::Auto).unwrap();
+    for word in context {
+        for key in word.bytes() {
+            session.process(Input::Letter(key));
+        }
+        session.process(Input::WordBoundary);
+    }
     let mut committed = String::new();
     for key in keys.bytes() {
         committed.push_str(&session.process(Input::Letter(key)).commit);

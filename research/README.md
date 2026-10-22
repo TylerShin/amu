@@ -10,6 +10,14 @@ mise run core:evaluate
 
 현재 기록은 [decoder-evaluation.txt](decoder-evaluation.txt)다. 개발용·평가용 난수 seed를 구분했다. 초기 평가에 쓴 샘플은 이후 수정에서도 재사용하므로 새 변경에 대한 독립적인 블라인드 평가가 아니다. 합성 약어는 실사용 분포와 다르다. 측정 범위·실패 예·공개 말뭉치 test 재현 방법은 [구현 현황](../docs/mvp.md)을 따른다.
 
+짧은 입력은 영문·한글 26개와 Shift 시작이 겹치지 않는 대문자 두 글자 494조합을 빈 문맥·한글/영문 1·4단어 뒤에서 평가한다. 말뭉치는 한 음절도 포함하고 빈 문맥·한글/영문 4단어 뒤로 나눈다. [decoder-before-short-input.txt](decoder-before-short-input.txt)는 수정 전 `5cfbdf8`의 코어에 현재 평가 코드와 fixture만 복사한 비교 결과다. 영문 힌트와 한국어 모델은 수정 전후 동일하다.
+
+직접 지정한 재현용 키열의 자동 판독과 한글 후보는 아래 명령으로 비교한다. 명령 인자만 출력하며 실제 타이핑을 수집하지 않는다.
+
+```sh
+mise exec -- cargo run -p amu-core --example inspect_input --locked -- 'ai' 'gksrmf AI' 'ai gksrmf'
+```
+
 `decoder-before-korean-statistics.txt`, `decoder-with-korean-statistics.txt`, `decoder-final-development.txt`는 개발 중의 비교 기록이며 현재 정확도의 근거로 사용하지 않는다.
 
 ## 한글 조합 기준 검사
