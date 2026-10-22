@@ -2,6 +2,10 @@
 #define AMU_H
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct AmuSession AmuSession;
 typedef struct {
     uint32_t consumed;
@@ -23,4 +27,7 @@ void amu_session_free(AmuSession *session);
    on the creating thread. No callback or pointer into Rust is returned. */
 uint32_t amu_session_process(AmuSession *session, uint32_t kind, uint32_t value, AmuOutput *output);
 uint32_t amu_session_reset(AmuSession *session);
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -71,3 +71,21 @@ run = "actionlint"
 [tasks."secrets:check"]
 description = "Git 인덱스의 공개 대상 파일을 gitleaks로 검사"
 run = "node scripts/check-secrets.mjs"
+
+[tasks."windows:check"]
+description = "Windows MSVC 환경에서 Rust·TSF x64/x86 통합 검사"
+run = "node scripts/check-windows.mjs"
+
+[tasks."windows:build"]
+description = "Windows TSF 입력기 x64/x86 빌드와 통합 검사"
+run = "node scripts/build-windows.mjs"
+
+[tasks."windows:package"]
+description = "Windows TSF 입력기를 빌드·검사하고 Release ZIP 생성"
+depends = ["windows:build"]
+run = "node scripts/package-windows.mjs"
+
+[tasks."windows:install"]
+description = "Windows 빌드·패키징·설치·등록 버전 확인 (관리자 PowerShell)"
+depends = ["windows:package"]
+run = "node scripts/install-windows.mjs"

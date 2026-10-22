@@ -23,9 +23,11 @@ airh qidprp               →  ai고 qi에게
 ```
 
 > [!NOTE]
-> 현재는 **macOS에서 직접 빌드해 사용하는 실험 버전**입니다. 자동 판독이 틀릴 수 있으며, 서명·공증된 설치 파일은 아직 배포하지 않습니다. Firefox·Chrome 등 외부 앱의 시스템 입력기 호환성은 검증 중입니다.
+> 현재는 **macOS·Windows에서 사용하는 실험 버전**입니다. 자동 판독이 틀릴 수 있으며, 서명·공증된 설치 파일은 아직 배포하지 않습니다. Firefox·Chrome 등 외부 앱의 시스템 입력기 호환성은 검증 중입니다.
 
 ## 직접 써보기
+
+Windows 11 x64 사용자는 [Windows 설치·빌드 안내](docs/install-windows.md)를 따라 Release ZIP을 설치하세요. 패키지에 64비트·32비트 앱용 입력기를 함께 넣습니다. 아래는 macOS 사용 방법입니다.
 
 macOS, Git, Xcode Command Line Tools의 Swift·clang·SDK, [mise](https://mise.jdx.dev/getting-started.html)가 필요합니다. Rust와 Node.js 버전은 `mise.toml`에서 관리합니다.
 
@@ -62,17 +64,18 @@ mise run macos:install
 | 미등록 약어·새 영문 문자열 | 형태와 문맥으로 평가; 모든 입력을 구별하지는 못함 |
 | macOS 테스트 창·InputMethodKit 입력기 | 로컬 빌드 가능 |
 | 외부 앱별 입력·포커스 전환 호환성 | 검증 중 |
-| Windows·Linux 입력기 연결 | 미구현 |
+| Windows TSF 입력기 | x64·x86 빌드·설치 제공; 외부 앱 호환성 검증 중 |
+| Linux 입력기 연결 | 미구현 |
 
-키 매핑은 ANSI QWERTY 위치와 Shift 기준입니다. Caps Lock 대문자 처리, 다른 배열·세벌식·옛한글·한자 변환, 확정된 단어의 재판독·자동 변환 취소는 아직 없습니다. 빌드의 최소 OS 대상은 macOS 13이며, 실제 로컬 실행은 Apple Silicon / macOS 26에서 확인했습니다. Intel Mac과 이전 OS의 사용 호환성을 보장하는 의미는 아닙니다.
+키 매핑은 ANSI QWERTY 위치와 Shift 기준입니다. macOS의 Caps Lock 대문자 처리, 다른 배열·세벌식·옛한글·한자 변환, 확정된 단어의 재판독·자동 변환 취소는 아직 없습니다. 빌드의 최소 OS 대상은 macOS 13이며, 실제 로컬 실행은 Apple Silicon / macOS 26에서 확인했습니다. Intel Mac과 이전 OS의 사용 호환성을 보장하는 의미는 아닙니다.
 
 ## 작동 원리
 
-**Rust 공통 코어 + libhangul 조합기 + Swift macOS 연결부**로 구성합니다.
+**Rust 공통 코어 + libhangul 조합기 + Swift macOS / C++ Windows 연결부**로 구성합니다.
 
 ```mermaid
 flowchart LR
-    Key[키 입력] --> Platform[macOS 연결부]
+    Key[키 입력] --> Platform[macOS / Windows 연결부]
     Platform --> Session[입력 세션]
     Session --> Hangul[libhangul 조합]
     Hangul --> Decoder[한글·영어·혼합 후보 비교]
@@ -86,8 +89,9 @@ flowchart LR
 | 경로 | 책임 |
 |---|---|
 | `crates/amu-core` | 조합, 후보 평가, 세션·문맥·삭제 정책 |
-| `crates/amu-ffi` · `include/amu.h` | Rust ↔ Swift의 C ABI 계약 |
+| `crates/amu-ffi` · `include/amu.h` | Rust ↔ Swift/C++의 C ABI 계약 |
 | `macos` | 키 이벤트, marked text, 메뉴, 테스트 창 |
+| `windows` | TSF 키 이벤트·조합 범위·COM 등록·설치 |
 | `models/korean` | 출처와 재생성 정보가 있는 한국어 음절 통계 |
 | `third_party/libhangul` | 리비전을 고정한 원본 조합 소스 |
 | `research` | 재현 가능한 조합·판독 평가 도구와 결과 |

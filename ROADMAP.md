@@ -25,7 +25,8 @@ Amu의 목표는 한영 전환 부담을 줄이면서 사용자가 쓴 글을 �
 
 ## 플랫폼과 배포
 
-- [ ] Windows에서 공통 코어 빌드와 TSF 연결 실험.
+- [x] Windows에서 공통 코어 MSVC 빌드와 TSF 연결·설치 구현.
+- [ ] Windows 메모장·브라우저·Electron 앱별 실사용 호환성 확인.
 - [ ] Linux 입력기 연결의 범위 결정.
 - [x] main CI 성공 후 Apple Silicon 개발 패키지를 GitHub Releases에 공개.
 - [x] 로컬 한 명령 빌드·설치·안전한 재시작·실행 버전 확인.
