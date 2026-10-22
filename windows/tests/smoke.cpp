@@ -1,5 +1,6 @@
 #include "text_store.h"
 #include "core_session.h"
+#include "context_session.h"
 #include "key_input.h"
 #include <iostream>
 #include <stdexcept>
@@ -28,17 +29,17 @@ struct Document {
     }
     ~Document() { manager->Pop(TF_POPF_ALL); }
 };
-bool keyDown(ITfKeyEventSink* keys, ITfContext* context, WPARAM key, bool shift = false, bool control = false) {
+bool keyDown(ITfKeystrokeMgr* keys, ITfContext*, WPARAM key, bool shift = false, bool control = false) {
     BYTE state[256]{};
     if (shift) state[VK_SHIFT] = 0x80;
     if (control) state[VK_CONTROL] = 0x80;
     require(SetKeyboardState(state) != FALSE, "SetKeyboardState");
     BOOL tested = FALSE, eaten = FALSE;
-    check(keys->OnTestKeyDown(context, key, 0, &tested), "OnTestKeyDown");
-    if (tested) check(keys->OnKeyDown(context, key, 0, &eaten), "OnKeyDown");
+    check(keys->TestKeyDown(key, 0, &tested), "OnTestKeyDown");
+    if (tested) check(keys->KeyDown(key, 0, &eaten), "OnKeyDown");
     return eaten != FALSE;
 }
-void type(ITfKeyEventSink* keys, ITfContext* context, const char* text) {
+void type(ITfKeystrokeMgr* keys, ITfContext* context, const char* text) {
     for (const char* character = text; *character; ++character) {
         bool upper = *character >= 'A' && *character <= 'Z';
         WPARAM key = upper ? *character : *character - 'a' + 'A';
@@ -57,20 +58,25 @@ void testCoreAndKeys() {
     require(translateKey('A', {false, false, false, false, true}).core.value == 'A', "Caps Lock");
     require(translateKey('A', {false, true, false, false, false}).action == KeyAction::finish, "Ctrl shortcut");
 }
-void testTsf(IClassFactory* factory) {
+void testRegisteredTsf() {
     ComPtr<ITfThreadMgrEx> thread;
     check(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&thread)), "TSF thread manager");
     TfClientId client;
-    check(thread->ActivateEx(&client, TF_TMAE_NOACTIVATETIP), "Activate TSF");
-    ComPtr<ITfClientId> clients;
-    check(thread.As(&clients), "TSF client identifiers");
-    TfClientId serviceClient;
-    check(clients->GetClientId(ServiceId, &serviceClient), "text service client identifier");
-    ComPtr<ITfTextInputProcessor> service;
-    check(factory->CreateInstance(nullptr, IID_PPV_ARGS(&service)), "Create text service");
-    check(service->Activate(thread.Get(), serviceClient), "Activate Amu");
-    ComPtr<ITfKeyEventSink> keys;
-    check(service.As(&keys), "Key sink");
+    check(thread->ActivateEx(&client, 0), "Activate TSF");
+    ComPtr<ITfInputProcessorProfiles> languages;
+    check(CoCreateInstance(CLSID_TF_InputProcessorProfiles, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&languages)), "language profiles");
+    check(languages->ChangeCurrentLanguage(LanguageId), "test process Korean input language");
+    ComPtr<ITfInputProcessorProfileMgr> profiles;
+    check(languages.As(&profiles), "profile manager");
+    auto activated = profiles->ActivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS);
+    check(activated, "activate installed Amu profile");
+    require(activated == S_OK, "installed Amu profile must be enabled");
+    pump();
+    TF_INPUTPROCESSORPROFILE active{};
+    check(profiles->GetActiveProfile(GUID_TFCAT_TIP_KEYBOARD, &active), "active keyboard profile");
+    require(active.clsid == ServiceId, "Windows must activate the installed Amu service");
+    ComPtr<ITfKeystrokeMgr> keys;
+    check(thread.As(&keys), "TSF keystroke manager");
     {
         Document document(thread.Get(), client);
         check(thread->SetFocus(document.manager.Get()), "Set focus");
@@ -147,10 +153,38 @@ void testTsf(IClassFactory* factory) {
         check(thread->SetFocus(nullptr), "clear sentence focus");
         pump();
     }
-    check(service->Deactivate(), "Deactivate Amu");
-    service.Reset(); keys.Reset();
+    check(profiles->DeactivateProfile(TF_PROFILETYPE_INPUTPROCESSOR, LanguageId, ServiceId, ProfileId, nullptr, TF_IPPMF_FORPROCESS), "deactivate test process Amu profile");
+    keys.Reset();
     pump();
     check(thread->Deactivate(), "Deactivate TSF");
+    std::cout << "PASS: installed TSF profile, keyboard routing, editing, focus and boundaries\n";
+}
+void testCompositionContext() {
+    ComPtr<ITfThreadMgrEx> thread;
+    check(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&thread)), "composition thread");
+    TfClientId client;
+    check(thread->ActivateEx(&client, TF_TMAE_NOACTIVATETIP), "composition thread activation");
+    ComPtr<ITfCategoryMgr> categories;
+    check(CoCreateInstance(CLSID_TF_CategoryMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&categories)), "composition category manager");
+    TfGuidAtom attribute;
+    check(categories->RegisterGUID(UnderlineId, &attribute), "composition attribute");
+    {
+        Document document(thread.Get(), client);
+        check(thread->SetFocus(document.manager.Get()), "composition focus");
+        ComPtr<ContextSession> session;
+        session.Attach(new ContextSession(document.context.Get(), client, attribute, 1));
+        check(session->attach(), "composition sink");
+        bool consumed = false;
+        for (char key : std::string("rkqtk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "composition input");
+        require(document.store->text == L"갑사", "real TSF composition text");
+        check(session->process({1, 0}, consumed), "composition backspace");
+        require(document.store->text == L"갑ㅅ", "real TSF jamo deletion");
+        check(session->process({2, 0}, consumed), "composition finish");
+        require(document.store->text == L"갑ㅅ" && document.store->compositions == 0, "composition finish preserves text once");
+        session->retire(); session.Reset(); pump();
+        check(thread->SetFocus(nullptr), "composition blur");
+    }
+    check(thread->Deactivate(), "composition thread deactivation");
 }
 }
 int wmain(int argc, wchar_t** argv) {
@@ -170,10 +204,11 @@ int wmain(int argc, wchar_t** argv) {
             check(getFactory(ServiceId, IID_PPV_ARGS(&factory)), "class factory");
         }
         testCoreAndKeys();
-        testTsf(factory.Get());
+        testCompositionContext();
+        if (argc == 2 && std::wstring(argv[1]) == L"--registered") testRegisteredTsf();
         factory.Reset();
         CoUninitialize();
-        std::cout << "PASS: Windows C ABI, key translation and real TSF composition/edit/focus checks\n";
+        std::cout << "PASS: Windows C ABI, key translation and TSF context checks\n";
         FreeLibrary(library);
         return 0;
     } catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }

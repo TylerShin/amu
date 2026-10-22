@@ -33,7 +33,7 @@ function buildArchitecture(architecture, directory) {
     'ole32.lib', 'oleaut32.lib', 'uuid.lib', 'user32.lib', 'advapi32.lib', 'delayimp.lib',
     'ws2_32.lib', 'userenv.lib', 'bcrypt.lib', 'ntdll.lib', 'synchronization.lib'];
   runWindows('cl.exe', [...flags, '/LD', ...sources, '/Fe:Amu.dll', '/link', `/DEF:${resolve(ROOT, 'windows/Amu.def')}`, '/DELAYLOAD:hangul.dll', ...libraries], { env, cwd: destination });
-  const testSources = ['windows/tests/smoke.cpp', 'windows/tests/text_store.cpp', 'windows/src/core_session.cpp', 'windows/src/key_input.cpp', 'windows/src/dependency_loader.cpp'].map((file) => resolve(ROOT, file));
+  const testSources = ['windows/tests/smoke.cpp', 'windows/tests/text_store.cpp', 'windows/src/core_session.cpp', 'windows/src/composition.cpp', 'windows/src/context_session.cpp', 'windows/src/key_input.cpp', 'windows/src/dependency_loader.cpp'].map((file) => resolve(ROOT, file));
   runWindows('cl.exe', [...flags, ...testSources, '/Fe:amu-check.exe', '/link', '/DELAYLOAD:hangul.dll', ...libraries], { env, cwd: destination });
   // Runtime DLLs are copied app-locally; a home PC does not need Visual Studio.
   const redistRoot = resolve(env.VCToolsRedistDir, architecture);

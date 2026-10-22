@@ -55,6 +55,7 @@ HRESULT TextService::OnTestKeyDown(ITfContext* context, WPARAM key, LPARAM, BOOL
     if (input.action == KeyAction::mode) { *eaten = TRUE; return S_OK; }
     if (input.action == KeyAction::input) {
         *eaten = key != VK_BACK || (session_ && session_->belongsTo(context) && session_->composing());
+        if (!*eaten && session_) session_->finishLater();
         return S_OK;
     }
     // TSF may never call OnKeyDown after FALSE. Finish before forwarding the
