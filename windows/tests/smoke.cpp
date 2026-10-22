@@ -20,7 +20,8 @@ struct Document {
     ComPtr<TextStore> store;
     ComPtr<ITfDocumentMgr> manager;
     ComPtr<ITfContext> context;
-    Document(ITfThreadMgr* thread, TfClientId client) {
+    ComPtr<ITfThreadMgr> owner;
+    Document(ITfThreadMgr* thread, TfClientId client) : owner(thread) {
         store.Attach(new TextStore());
         check(thread->CreateDocumentMgr(&manager), "CreateDocumentMgr");
         TfEditCookie cookie;
@@ -29,7 +30,11 @@ struct Document {
         ComPtr<ITfDocumentMgr> previous;
         check(thread->AssociateFocus(store->window(), manager.Get(), &previous), "associate document window");
     }
-    ~Document() { manager->Pop(TF_POPF_ALL); }
+    ~Document() {
+        ComPtr<ITfDocumentMgr> previous;
+        owner->AssociateFocus(store->window(), nullptr, &previous);
+        manager->Pop(TF_POPF_ALL);
+    }
 };
 bool keyDown(ITfKeystrokeMgr* keys, ITfContext*, WPARAM key, bool shift = false, bool control = false) {
     BYTE state[256]{};
@@ -185,17 +190,26 @@ void testCompositionContext() {
     {
         Document document(thread.Get(), client);
         check(thread->SetFocus(document.manager.Get()), "composition focus");
+        document.store->insertFromHost(L"🙂 ");
         ComPtr<ContextSession> session;
         session.Attach(new ContextSession(document.context.Get(), client, attribute, 1));
         check(session->attach(), "composition sink");
         std::cout << "TEST: composition edit lock" << std::endl;
         bool consumed = false;
         for (char key : std::string("rkqtk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "composition input");
-        require(document.store->text == L"갑사", "real TSF composition text");
+        require(document.store->text == L"🙂 갑사", "real TSF composition preserves UTF-16 prefix");
         check(session->process({1, 0}, consumed), "composition backspace");
-        require(document.store->text == L"갑ㅅ", "real TSF jamo deletion");
+        require(document.store->text == L"🙂 갑ㅅ", "real TSF jamo deletion");
         check(session->process({2, 0}, consumed), "composition finish");
-        require(document.store->text == L"갑ㅅ" && document.store->compositions == 0, "composition finish preserves text once");
+        require(document.store->text == L"🙂 갑ㅅ" && document.store->compositions == 0, "composition finish preserves text once");
+        for (char key : std::string("rk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input before host termination");
+        ComPtr<ITfContextOwnerCompositionServices> owner;
+        check(document.context.As(&owner), "context owner composition services");
+        check(owner->TerminateComposition(nullptr), "host terminates composition");
+        pump();
+        for (char key : std::string("sk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input after host termination");
+        check(session->process({2, 0}, consumed), "finish after host termination");
+        require(document.store->text == L"🙂 갑ㅅ가나", "host termination never reuses committed preedit");
         session->retire(); session.Reset(); pump();
         check(thread->SetFocus(nullptr), "composition blur");
     }
