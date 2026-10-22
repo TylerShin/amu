@@ -56,6 +56,7 @@ HRESULT ContextSession::process(CoreInput input, bool& consumed) {
 }
 void ContextSession::finishLater() {
     core_.reset();
+    finishing_ = composition_.active();
     if (!composition_.active()) return;
     ComPtr<InputEdit> edit;
     edit.Attach(new (std::nothrow) InputEdit(this, revision_));
@@ -67,10 +68,11 @@ HRESULT ContextSession::edit(TfEditCookie cookie, CoreInput input, bool& consume
     if (applying_) return E_UNEXPECTED;
     struct Applying { bool& value; Applying(bool& v) : value(v) { value = true; } ~Applying() { value = false; } } applying(applying_);
     ++revision_;
-    if (!composition_.ownsCaretAndText(context_.Get(), cookie)) {
+    if (finishing_ || !composition_.ownsCaretAndText(context_.Get(), cookie)) {
         auto result = composition_.finish(cookie);
         core_.reset();
         if (FAILED(result)) return result;
+        finishing_ = false;
     }
     CompositionUpdate update;
     auto result = core_.process(input, update);
@@ -97,6 +99,7 @@ HRESULT ContextSession::finishEdit(TfEditCookie cookie, uint64_t revision) {
     applying_ = true;
     auto result = composition_.finish(cookie);
     applying_ = false;
+    if (SUCCEEDED(result)) finishing_ = false;
     return result;
 }
 HRESULT ContextSession::QueryInterface(REFIID iid, void** result) {
@@ -111,6 +114,7 @@ HRESULT ContextSession::OnCompositionTerminated(TfEditCookie, ITfComposition* co
     if (composition_.matches(composition)) {
         bool expected = composition_.ending();
         composition_.terminated();
+        finishing_ = false;
         if (!expected) core_.reset();
         ++revision_;
     }

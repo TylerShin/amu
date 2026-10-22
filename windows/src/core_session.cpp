@@ -1,8 +1,12 @@
 #include "core_session.h"
+#include "dependency_loader.h"
 
 namespace amu {
 namespace {
 HRESULT decode(const uint8_t* bytes, uint32_t length, std::wstring& text);
+}
+CoreSession::CoreSession(uint32_t mode) : handle_(nullptr) {
+    if (SUCCEEDED(prepareCoreLibrary())) handle_ = amu_session_new(mode);
 }
 HRESULT CoreSession::process(CoreInput input, CompositionUpdate& update) {
     if (!handle_) return E_UNEXPECTED;

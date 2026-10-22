@@ -30,5 +30,6 @@ private:
     uint64_t revision_ = 0;
     bool applying_ = false;
     bool enabled_ = true;
+    bool finishing_ = false;
 };
 }

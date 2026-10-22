@@ -202,6 +202,13 @@ void testCompositionContext() {
         require(document.store->text == L"🙂 갑ㅅ", "real TSF jamo deletion");
         check(session->process({2, 0}, consumed), "composition finish");
         require(document.store->text == L"🙂 갑ㅅ" && document.store->compositions == 0, "composition finish preserves text once");
+        for (char key : std::string("rk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input before deferred finish");
+        document.store->denyLock = true;
+        session->finishLater();
+        document.store->denyLock = false;
+        for (char key : std::string("sk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input after deferred finish");
+        check(session->process({2, 0}, consumed), "finish deferred input");
+        require(document.store->text == L"🙂 갑ㅅ가나", "a refused finish never overwrites the previous word");
         for (char key : std::string("rk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input before host termination");
         ComPtr<ITfContextOwnerCompositionServices> owner;
         check(document.context.As(&owner), "context owner composition services");
@@ -209,7 +216,7 @@ void testCompositionContext() {
         pump();
         for (char key : std::string("sk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "input after host termination");
         check(session->process({2, 0}, consumed), "finish after host termination");
-        require(document.store->text == L"🙂 갑ㅅ가나", "host termination never reuses committed preedit");
+        require(document.store->text == L"🙂 갑ㅅ가나가나", "host termination never reuses committed preedit");
         session->retire(); session.Reset(); pump();
         check(thread->SetFocus(nullptr), "composition blur");
     }
@@ -218,6 +225,12 @@ void testCompositionContext() {
 }
 int wmain(int argc, wchar_t** argv) {
     try {
+        if (argc == 2 && std::wstring(argv[1]) == L"--core-unavailable") {
+            CoreSession core(0);
+            require(!core.available(), "missing or incompatible library must fail before entering Rust");
+            std::cout << "PASS: unavailable core library is rejected without terminating the host" << std::endl;
+            return 0;
+        }
         HMODULE library = LoadLibraryExW(L"Amu.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         require(library != nullptr, "load Amu.dll");
         auto identity = reinterpret_cast<const char* (__cdecl*)()>(GetProcAddress(library, "AmuBuildJson"));

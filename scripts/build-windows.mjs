@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readBuildIdentity } from './build-identity.mjs';
 import { runWindows, windowsEnvironment } from './windows-toolchain.mjs';
@@ -42,4 +42,15 @@ function buildArchitecture(architecture, directory) {
   const redist = resolve(redistRoot, runtime);
   for (const file of readdirSync(redist).filter((name) => name.endsWith('.dll'))) cpSync(resolve(redist, file), resolve(destination, file));
   runWindows(resolve(destination, 'amu-check.exe'), [], { env, cwd: destination, timeout: 60_000 });
+  verifyUnavailableDependency(destination, env);
+}
+
+function verifyUnavailableDependency(directory, env) {
+  const temporary = mkdtempSync(resolve(ROOT, 'dist/dependency-check-'));
+  try {
+    for (const file of readdirSync(directory).filter((name) => /\.(dll|exe)$/.test(name) && name !== 'hangul.dll')) cpSync(resolve(directory, file), resolve(temporary, file));
+    runWindows(resolve(temporary, 'amu-check.exe'), ['--core-unavailable'], { env, cwd: temporary, timeout: 30_000 });
+    cpSync(resolve(directory, 'Amu.dll'), resolve(temporary, 'hangul.dll'));
+    runWindows(resolve(temporary, 'amu-check.exe'), ['--core-unavailable'], { env, cwd: temporary, timeout: 30_000 });
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
 }

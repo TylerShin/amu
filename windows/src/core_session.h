@@ -8,7 +8,7 @@ struct CompositionUpdate { bool consumed = false; std::wstring commit; std::wstr
 
 class CoreSession {
 public:
-    explicit CoreSession(uint32_t mode) : handle_(amu_session_new(mode)) {}
+    explicit CoreSession(uint32_t mode);
     ~CoreSession() { amu_session_free(handle_); }
     CoreSession(const CoreSession&) = delete;
     CoreSession& operator=(const CoreSession&) = delete;
