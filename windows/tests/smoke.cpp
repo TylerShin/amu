@@ -62,9 +62,13 @@ void testTsf(IClassFactory* factory) {
     check(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&thread)), "TSF thread manager");
     TfClientId client;
     check(thread->ActivateEx(&client, TF_TMAE_NOACTIVATETIP), "Activate TSF");
+    ComPtr<ITfClientId> clients;
+    check(thread.As(&clients), "TSF client identifiers");
+    TfClientId serviceClient;
+    check(clients->GetClientId(ServiceId, &serviceClient), "text service client identifier");
     ComPtr<ITfTextInputProcessor> service;
     check(factory->CreateInstance(nullptr, IID_PPV_ARGS(&service)), "Create text service");
-    check(service->Activate(thread.Get(), client), "Activate Amu");
+    check(service->Activate(thread.Get(), serviceClient), "Activate Amu");
     ComPtr<ITfKeyEventSink> keys;
     check(service.As(&keys), "Key sink");
     {
@@ -99,7 +103,27 @@ void testTsf(IClassFactory* factory) {
         require(other.store->compositions == 0, "shortcut finishes composition");
         type(keys.Get(), other.context.Get(), "fd");
         require(other.store->text == L"fallbackㄹㅇ", "initials use shared core");
+        other.store->moveCaret(0);
+        pump();
+        type(keys.Get(), other.context.Get(), "AI");
+        require(other.store->text == L"AIfallbackㄹㅇ", "moving caret preserves the previous composition");
+        require(keyDown(keys.Get(), other.context.Get(), VK_F2, true, true), "Korean mode shortcut");
+        type(keys.Get(), other.context.Get(), "rkqtk");
+        require(other.store->text == L"AI갑사fallbackㄹㅇ", "fixed Korean mode at moved caret");
+        require(keyDown(keys.Get(), other.context.Get(), VK_BACK), "Korean deletion consumed");
+        require(other.store->text == L"AI갑ㅅfallbackㄹㅇ", "settled syllable deletion");
         check(thread->SetFocus(nullptr), "clear focus");
+        pump();
+    }
+    {
+        Document document(thread.Get(), client);
+        check(thread->SetFocus(document.manager.Get()), "long input focus");
+        require(keyDown(keys.Get(), document.context.Get(), VK_F3, true, true), "English mode shortcut");
+        std::string letters(513, 'a');
+        type(keys.Get(), document.context.Get(), letters.c_str());
+        require(!keyDown(keys.Get(), document.context.Get(), VK_RETURN), "finish long input");
+        require(document.store->text == std::wstring(513, L'a'), "bounded commits never duplicate or lose letters");
+        check(thread->SetFocus(nullptr), "clear long input focus");
         pump();
     }
     check(service->Deactivate(), "Deactivate Amu");
@@ -119,7 +143,11 @@ int wmain(int argc, wchar_t** argv) {
         auto getFactory = reinterpret_cast<HRESULT (__stdcall*)(REFCLSID, REFIID, void**)>(GetProcAddress(library, "DllGetClassObject"));
         require(getFactory != nullptr, "class factory export");
         ComPtr<IClassFactory> factory;
-        check(getFactory(ServiceId, IID_PPV_ARGS(&factory)), "class factory");
+        if (argc == 2 && std::wstring(argv[1]) == L"--registered") {
+            check(CoGetClassObject(ServiceId, CLSCTX_INPROC_SERVER, nullptr, IID_PPV_ARGS(&factory)), "registered COM class factory");
+        } else {
+            check(getFactory(ServiceId, IID_PPV_ARGS(&factory)), "class factory");
+        }
         testCoreAndKeys();
         testTsf(factory.Get());
         factory.Reset();

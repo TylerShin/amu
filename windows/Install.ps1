@@ -144,6 +144,7 @@ function Confirm-Registration([string]$Directory) {
             try { if ($key.GetValue('') -ne $library) { throw '등록된 DLL 경로가 다릅니다.' } }
             finally { $key.Dispose() }
         } finally { $registry.Dispose() }
+        Invoke-Native (Join-Path $Directory ($architecture + '\amu-check.exe')) @('--registered')
     }
 }
 
