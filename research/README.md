@@ -8,7 +8,7 @@
 mise run core:evaluate
 ```
 
-최종 기록은 [decoder-evaluation.txt](decoder-evaluation.txt)다. 개발용·최종 평가용 난수 seed를 구분하고, 최종 결과를 확인한 뒤 가중치를 조정하지 않았다. 합성 약어는 실사용 분포와 다르다. 측정 범위·실패 예·공개 말뭉치 test 재현 방법은 [구현 현황](../docs/mvp.md)을 따른다.
+현재 기록은 [decoder-evaluation.txt](decoder-evaluation.txt)다. 개발용·평가용 난수 seed를 구분했다. 초기 평가에 쓴 샘플은 이후 수정에서도 재사용하므로 새 변경에 대한 독립적인 블라인드 평가가 아니다. 합성 약어는 실사용 분포와 다르다. 측정 범위·실패 예·공개 말뭉치 test 재현 방법은 [구현 현황](../docs/mvp.md)을 따른다.
 
 `decoder-before-korean-statistics.txt`, `decoder-with-korean-statistics.txt`, `decoder-final-development.txt`는 개발 중의 비교 기록이며 현재 정확도의 근거로 사용하지 않는다.
 

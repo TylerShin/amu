@@ -22,12 +22,13 @@ pub(crate) fn initialize() {
 }
 
 /// Spelling and abbreviation shape are evidence even when no word hint matches.
-pub(crate) fn assess(keys: &str) -> EnglishEvidence {
+pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     let model = MODEL.get_or_init(EnglishModel::train);
     let lowercase = keys.to_ascii_lowercase();
     let length = keys.len() as f32;
     let word_hint = model.words.contains(lowercase.as_str());
-    let capitals = keys.len() >= 2
+    let capitals = use_capitals
+        && keys.len() >= 2
         && keys.bytes().all(|key| key.is_ascii_uppercase())
         && keys.bytes().any(|key| !b"REQTWOP".contains(&key));
     let mut cost = model.spelling_cost(lowercase.as_bytes());

@@ -47,6 +47,16 @@ pub(crate) fn boundary_cost(text: &str) -> f32 {
         .clamp(-2.0, 4.0)
 }
 
+/// Corpus support distinguishes plausible Shift overlap from a rare syllable
+/// that an uppercase abbreviation happens to compose.
+pub(crate) fn contains_only_observed_syllables(text: &str) -> bool {
+    let model = MODEL.get_or_init(SyllableModel::load);
+    text.chars().all(|character| {
+        ('가'..='힣').contains(&character)
+            && model.unigrams[character as usize - 0xac00] < UNKNOWN_COST
+    })
+}
+
 struct SyllableModel {
     unigrams: [f32; SYLLABLES],
     bigrams: HashMap<usize, f32>,

@@ -30,12 +30,47 @@ struct SmokeTest {
 
         verifyMixedSuffix(input)
         verifyUnregisteredSuffixAndContext(input)
+        verifyShiftAndRepeatedJamo(input)
+        verifySpaceKeyPreservesWordBoundary(input)
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, selection replacement, reentrant finish")
+    }
+
+    private static func verifySpaceKeyPreservesWordBoundary(_ input: TypingView) {
+        reset(input)
+        press(input, [(2, "d"), (38, "j"), (14, "E"), (38, "j"), (3, "f"), (15, "R"), (40, "k")])
+        expect(input.string == "어떨까", "The first word must compose before Space")
+        press(input, [(49, " ")])
+        expect(input.string == "어떨까 " && !input.hasMarkedText(), "Space must commit the word and insert one space: \(input.string)")
+        press(input, [(17, "t"), (37, "l"), (9, "v"), (1, "s"), (35, "p"), (2, "d"), (16, "y")])
+        input.coordinator.finish(client: input)
+        expect(input.string == "어떨까 싶네요", "Typing the next word must preserve the space: \(input.string)")
+    }
+
+    private static func verifyShiftAndRepeatedJamo(_ input: TypingView) {
+        let cases: [([(UInt16, String)], String)] = [
+            ([(12, "q"), (38, "j"), (3, "f"), (17, "T"), (38, "J")], "벌써"),
+            ([(2, "d"), (40, "k"), (15, "R"), (40, "K")], "아까"),
+            ([(2, "d"), (38, "j"), (14, "E"), (38, "j"), (3, "f"), (15, "R"), (40, "K")], "어떨까"),
+            ([(2, "d"), (38, "j"), (14, "E"), (38, "J"), (3, "F"), (15, "R"), (40, "K")], "어떨까"),
+            ([(5, "g"), (5, "g"), (5, "g")], "ㅎㅎㅎ"),
+            ([(6, "z"), (6, "z"), (6, "z")], "ㅋㅋㅋ"),
+        ]
+        for (keys, expected) in cases {
+            reset(input)
+            press(input, keys)
+            expect(input.string == expected && input.hasMarkedText(), "Shift and repeated jamo must survive the native event bridge: \(expected)")
+            input.coordinator.finish(client: input)
+            expect(input.string == expected && !input.hasMarkedText(), "Commit must preserve \(expected)")
+        }
+        press(input, [(5, "g"), (5, "g")])
+        expect(input.string == "ㅋㅋㅋㅎㅎ", "Repeated jamo should compose after the previous token was committed")
+        press(input, [(51, "\u{7f}")])
+        expect(input.string == "ㅋㅋㅋㅎ", "Deleting repeated jamo must preserve the committed prefix")
     }
 
     private static func verifyUnregisteredSuffixAndContext(_ input: TypingView) {
@@ -74,7 +109,8 @@ struct SmokeTest {
     }
 
     private static func keyEvent(_ code: UInt16, _ text: String) -> NSEvent {
-        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+        let flags: NSEvent.ModifierFlags = text != text.lowercased() ? [.shift] : []
+        return NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
     }
 
     private static func reset(_ input: TypingView) {

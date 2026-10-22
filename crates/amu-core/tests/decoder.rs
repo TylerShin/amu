@@ -55,6 +55,90 @@ fn recent_words_resolve_an_ambiguous_key_sequence_and_reset_at_focus_boundaries(
 }
 
 #[test]
+fn shift_held_after_tense_consonants_does_not_split_a_korean_sentence() {
+    let mut session = Session::new(Mode::Auto).unwrap();
+    let mut sentence = String::new();
+    for (keys, expected) in [
+        ("wj", "저"),
+        ("qjfTJ", "벌써"),
+        ("dkRK", "아까"),
+        ("rmrj", "그거"),
+        ("ek", "다"),
+        ("aksemfdjTdjdy", "만들었어요"),
+    ] {
+        assert_eq!(type_keys(&mut session, keys), expected, "{keys}");
+        sentence.push_str(&session.process(Input::WordBoundary).commit);
+        sentence.push(' ');
+    }
+    assert_eq!(sentence.trim_end(), "저 벌써 아까 그거 다 만들었어요");
+}
+
+#[test]
+fn korean_words_survive_shift_overlapping_the_following_keys() {
+    for line in CASES.lines().filter(|line| line.starts_with("korean\t")) {
+        let fields: Vec<_> = line.split('\t').collect();
+        let keys = fields[1];
+        let expected = fields[2];
+        for (start, key) in keys.bytes().enumerate() {
+            if !b"REQTWOP".contains(&key) {
+                continue;
+            }
+            let mut held = keys.as_bytes().to_vec();
+            for end in start + 1..held.len() {
+                // Stop where holding Shift would change the intended Hangul.
+                if b"reqtwop".contains(&held[end]) {
+                    break;
+                }
+                held[end].make_ascii_uppercase();
+                let variant = std::str::from_utf8(&held).unwrap();
+                let mut session = Session::new(Mode::Auto).unwrap();
+                assert_eq!(type_keys(&mut session, variant), expected, "{variant}");
+            }
+        }
+    }
+}
+
+#[test]
+fn shifted_final_syllable_stays_korean_before_a_word_boundary() {
+    for context in ["", "gksrmf", "hello"] {
+        for keys in ["djEjfRk", "djEjfRK", "djEJfRK", "djEJFRK"] {
+            let mut session = Session::new(Mode::Auto).unwrap();
+            type_keys(&mut session, context);
+            session.process(Input::WordBoundary);
+            assert_eq!(type_keys(&mut session, keys), "어떨까", "{context}: {keys}");
+            assert_eq!(session.process(Input::WordBoundary).commit, "어떨까");
+            assert_eq!(type_keys(&mut session, "tlvspdy"), "싶네요");
+        }
+    }
+}
+
+#[test]
+fn repeated_jamo_supports_editing_boundaries_and_explicit_english() {
+    let mut session = Session::new(Mode::Auto).unwrap();
+    for (keys, expected) in [("ggg", "ㅎㅎㅎ"), ("zzz", "ㅋㅋㅋ")] {
+        assert_eq!(type_keys(&mut session, keys), expected);
+        for remaining in (0..3).rev() {
+            let update = session.process(Input::Backspace);
+            assert!(update.consumed);
+            assert_eq!(
+                update.preedit,
+                expected.chars().take(remaining).collect::<String>()
+            );
+        }
+        assert!(!session.process(Input::Backspace).consumed);
+    }
+    assert_eq!(type_keys(&mut session, "zzz"), "ㅋㅋㅋ");
+    assert_eq!(session.process(Input::WordBoundary).commit, "ㅋㅋㅋ");
+    assert_eq!(type_keys(&mut session, "hello"), "hello");
+    session.process(Input::Finish);
+    assert_eq!(type_keys(&mut session, "ZZZ"), "ZZZ");
+    session.change_mode(Mode::English);
+    assert_eq!(type_keys(&mut session, "ggg"), "ggg");
+    session.process(Input::WordBoundary);
+    assert_eq!(type_keys(&mut session, "zzz"), "zzz");
+}
+
+#[test]
 fn deleting_committed_text_discards_stale_context() {
     let mut session = Session::new(Mode::Auto).unwrap();
     type_keys(&mut session, "gksrmf");

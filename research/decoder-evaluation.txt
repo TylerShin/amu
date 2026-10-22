@@ -1,10 +1,11 @@
-cold session/model initialization: 3.49ms
+cold session/model initialization: 5.37ms
 regression english: 16/16
 regression english-first: 4/4
-regression korean: 42/42
-regression novel-english: 10/10
+regression korean: 52/52
+regression korean-expression: 8/8
+regression novel-english: 12/12
 regression novel-mixed: 12/12
-development generated lowercase: 445/600 intended Latin suffixes preserved
+development generated lowercase: 421/600 intended Latin suffixes preserved
   miss: 삼성xmx → 삼성틑
   miss: 설정xmx → 설정틑
   miss: 화면xmx → 화면틑
@@ -13,8 +14,16 @@ development generated lowercase: 445/600 intended Latin suffixes preserved
   miss: 엔진xmx → 엔진틑
   miss: 모델qxlx → 모덻팉
   miss: 삼성clc → 삼성칯
-development generated uppercase: 600/600 intended Latin suffixes preserved
-held-out generated lowercase: 447/600 intended Latin suffixes preserved
+development generated uppercase: 588/600 intended Latin suffixes preserved
+  miss: 삼성RKF → 삼성깔
+  miss: 설정RKF → 설정깔
+  miss: 화면RKF → 화면깔
+  miss: 기능RKF → 기능깔
+  miss: 모델RKF → 모델깔
+  miss: 엔진RKF → 엔진깔
+  miss: 삼성WHF → 삼성쫄
+  miss: 설정WHF → 설정쫄
+held-out generated lowercase: 446/600 intended Latin suffixes preserved
   miss: 삼성kcwy → 삼서앛죠
   miss: 설정kcwy → 설저앛죠
   miss: 화면kcwy → 화며낯죠
@@ -23,13 +32,15 @@ held-out generated lowercase: 447/600 intended Latin suffixes preserved
   miss: 엔진kcwy → 엔지낯죠
   miss: 삼성hdyr → 삼서오욕
   miss: 설정hdyr → 설저오욕
-held-out generated uppercase: 594/600 intended Latin suffixes preserved
+held-out generated uppercase: 588/600 intended Latin suffixes preserved
   miss: 삼성PTP → 삼서예쎼
   miss: 설정PTP → 설저예쎼
   miss: 화면PTP → 화며녜쎼
   miss: 기능PTP → 기느예쎼
   miss: 모델PTP → 모데례쎼
   miss: 엔진PTP → 엔지녜쎼
+  miss: 삼성WJDL → 삼성쩌이
+  miss: 설정WJDL → 설정쩌이
 held-out Korean FORM tokens (2+ syllables, neutral context): 8747/8747 preserved
-release core fixture keys: n=56100, p50=0.6µs p95=3.0µs p99=4.3µs
-release core 64-key token: n=6400, p50=28.0µs p95=94.8µs p99=106.2µs
+release core fixture keys: n=62900, p50=0.5µs p95=2.8µs p99=3.9µs
+release core 64-key token: n=6400, p50=28.0µs p95=96.3µs p99=113.8µs

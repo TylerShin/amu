@@ -47,13 +47,18 @@ impl Decoder {
         if keys.is_empty() {
             return Reading::English;
         }
-        let mut best = unsplit_candidate(keys, korean, context);
+        let korean_evidence = KoreanEvidence::assess(korean, keys.len());
+        let use_capitals = !korean_evidence.explains_capitals(keys, korean);
+        if korean_evidence.repeated_jamo && !use_capitals {
+            return Reading::Korean;
+        }
+        let mut best = unsplit_candidate(keys, &korean_evidence, context, use_capitals);
         if keys.len() < 4 {
             return best.reading;
         }
         let unsplit_cost = best.cost;
-        self.consider_korean_first(keys, context, &mut best, unsplit_cost);
-        self.consider_english_first(keys, context, &mut best, unsplit_cost);
+        self.consider_korean_first(keys, context, &mut best, unsplit_cost, use_capitals);
+        self.consider_english_first(keys, context, &mut best, unsplit_cost, use_capitals);
         best.reading
     }
 
@@ -67,13 +72,14 @@ impl Decoder {
         context: &RecentContext,
         best: &mut Candidate,
         unsplit_cost: f32,
+        use_capitals: bool,
     ) {
         self.probe.reset();
         for boundary in 1..keys.len() {
             self.probe.append(keys.as_bytes()[boundary - 1]);
             let korean_text = self.probe.text();
             let prefix = KoreanEvidence::assess(&korean_text, boundary);
-            let suffix = english::assess(&keys[boundary..]);
+            let suffix = english::assess(&keys[boundary..], use_capitals);
             if prefix.complete && suffix.supports_split {
                 best.consider_split(
                     Candidate {
@@ -100,9 +106,10 @@ impl Decoder {
         context: &RecentContext,
         best: &mut Candidate,
         unsplit_cost: f32,
+        use_capitals: bool,
     ) {
         for boundary in 2..keys.len() {
-            let prefix = english::assess(&keys[..boundary]);
+            let prefix = english::assess(&keys[..boundary], use_capitals);
             if !prefix.supports_split {
                 continue;
             }
@@ -130,9 +137,13 @@ impl Decoder {
     }
 }
 
-fn unsplit_candidate(keys: &str, korean: &str, context: &RecentContext) -> Candidate {
-    let korean_evidence = KoreanEvidence::assess(korean, keys.len());
-    let english_evidence = english::assess(keys);
+fn unsplit_candidate(
+    keys: &str,
+    korean_evidence: &KoreanEvidence,
+    context: &RecentContext,
+    use_capitals: bool,
+) -> Candidate {
+    let english_evidence = english::assess(keys, use_capitals);
     let use_context = !korean_evidence.complete || english_evidence.short_word_or_capitals;
     let mut best = Candidate {
         reading: Reading::Korean,
