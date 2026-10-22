@@ -17,11 +17,18 @@ HRESULT TextStore::AdviseSink(REFIID iid, IUnknown* sink, DWORD) {
 HRESULT TextStore::UnadviseSink(IUnknown*) { sink_.Reset(); return S_OK; }
 HRESULT TextStore::RequestLock(DWORD flags, HRESULT* result) {
     if (!result) return E_POINTER;
-    if (denyLock || lock_) { *result = TS_E_SYNCHRONOUS; return S_OK; }
+    if (denyLock || (lock_ && (flags & TS_LF_SYNC))) { *result = TS_E_SYNCHRONOUS; return S_OK; }
+    if (lock_) { pendingLock_ = flags; *result = TS_S_ASYNC; return S_OK; }
     if (!sink_) return E_UNEXPECTED;
     lock_ = flags;
     *result = sink_->OnLockGranted(flags);
     lock_ = 0;
+    while (pendingLock_) {
+        lock_ = pendingLock_;
+        pendingLock_ = 0;
+        sink_->OnLockGranted(lock_);
+        lock_ = 0;
+    }
     return S_OK;
 }
 HRESULT TextStore::GetStatus(TS_STATUS* status) { *status = {readOnly ? static_cast<DWORD>(TS_SD_READONLY) : 0u, 0}; return S_OK; }
@@ -45,9 +52,10 @@ HRESULT TextStore::GetText(LONG first, LONG last, WCHAR* plain, ULONG capacity, 
     if (!(lock_ & TS_LF_READ)) return TS_E_NOLOCK;
     if (last == -1) last = static_cast<LONG>(text.size());
     if (first < 0 || last < first || last > static_cast<LONG>(text.size())) return TS_E_INVALIDPOS;
-    ULONG length = std::min(capacity, static_cast<ULONG>(last - first));
-    if (length) std::copy_n(text.data() + first, length, plain);
-    if (copied) *copied = length;
+    ULONG available = static_cast<ULONG>(last - first);
+    ULONG length = capacity ? std::min(capacity, available) : (runCapacity ? available : 0);
+    if (capacity && length) std::copy_n(text.data() + first, length, plain);
+    if (copied) *copied = capacity ? length : 0;
     if (runCount) *runCount = runCapacity && length ? 1 : 0;
     if (runCapacity && length) *runs = {length, TS_RT_PLAIN};
     if (next) *next = first + static_cast<LONG>(length);

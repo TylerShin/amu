@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-function Invoke-AmuInstaller {
+function Invoke-AmuInstaller([string]$PackageDirectory = $PSScriptRoot) {
     if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
         throw '이 패키지는 Windows 11 x64용입니다. ARM64는 아직 지원하지 않습니다.'
     }
@@ -51,9 +51,9 @@ function Invoke-AmuInstaller {
             Write-Output ('로그아웃·로그인 후 삭제 가능한 폴더: ' + $root)
             return
         }
-        $manifest = Get-Content -Raw (Join-Path $PSScriptRoot 'package.json') | ConvertFrom-Json
+        $manifest = Get-Content -Raw (Join-Path $PackageDirectory 'package.json') | ConvertFrom-Json
         if ($manifest.identifier -notmatch '^v[0-9][A-Za-z0-9.\-]+$') { throw '잘못된 빌드 식별자입니다.' }
-        Confirm-Package $PSScriptRoot $manifest
+        Confirm-Package $PackageDirectory $manifest
         $destination = Join-Path $root ('versions\' + $manifest.identifier)
         Assert-InstalledPath $destination $root
         if (-not (Test-Path $destination)) {
@@ -63,9 +63,9 @@ function Invoke-AmuInstaller {
                 foreach ($file in $manifest.files) {
                     $target = Join-Path $staging $file.path
                     New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
-                    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file.path) -Destination $target
+                    Copy-Item -LiteralPath (Join-Path $PackageDirectory $file.path) -Destination $target
                 }
-                Copy-Item (Join-Path $PSScriptRoot 'package.json') $staging
+                Copy-Item (Join-Path $PackageDirectory 'package.json') $staging
                 Confirm-Package $staging $manifest
                 Confirm-Version $staging $manifest.identifier
                 [IO.Directory]::Move($staging, $destination)
@@ -165,4 +165,4 @@ function Update-LanguageList([switch]$Remove) {
     Set-WinUserLanguageList $languages -Force
 }
 
-Invoke-AmuInstaller
+if ($MyInvocation.InvocationName -ne '.') { Invoke-AmuInstaller }

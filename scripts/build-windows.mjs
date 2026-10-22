@@ -41,5 +41,5 @@ function buildArchitecture(architecture, directory) {
   if (!runtime) throw new Error(`MSVC 런타임을 찾지 못했습니다: ${redistRoot}`);
   const redist = resolve(redistRoot, runtime);
   for (const file of readdirSync(redist).filter((name) => name.endsWith('.dll'))) cpSync(resolve(redist, file), resolve(destination, file));
-  runWindows(resolve(destination, 'amu-check.exe'), [], { env, cwd: destination });
+  runWindows(resolve(destination, 'amu-check.exe'), [], { env, cwd: destination, timeout: 60_000 });
 }

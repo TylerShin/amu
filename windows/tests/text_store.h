@@ -6,6 +6,8 @@ namespace amu::test {
 // A small real TSF document owner. This is not a mock of ITfContext or ITfRange.
 class TextStore final : public ITextStoreACP, public ITfContextOwnerCompositionSink, public Lifetime {
 public:
+    TextStore() : window_(CreateWindowExW(0, L"STATIC", L"Amu TSF test", WS_OVERLAPPED, 0, 0, 800, 600, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr)) {}
+    ~TextStore() override { if (window_) DestroyWindow(window_); }
     std::wstring text;
     LONG start = 0;
     LONG end = 0;
@@ -40,7 +42,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetACPFromPoint(TsViewCookie, const POINT*, DWORD, LONG*) override { return TS_E_NOLAYOUT; }
     HRESULT STDMETHODCALLTYPE GetTextExt(TsViewCookie, LONG, LONG, RECT*, BOOL*) override;
     HRESULT STDMETHODCALLTYPE GetScreenExt(TsViewCookie, RECT* rect) override { *rect = {0, 0, 800, 600}; return S_OK; }
-    HRESULT STDMETHODCALLTYPE GetWnd(TsViewCookie, HWND* window) override { *window = GetDesktopWindow(); return S_OK; }
+    HRESULT STDMETHODCALLTYPE GetWnd(TsViewCookie, HWND* window) override { *window = window_; return window_ ? S_OK : E_FAIL; }
     HRESULT STDMETHODCALLTYPE OnStartComposition(ITfCompositionView*, BOOL* accepted) override { ++compositions; *accepted = TRUE; return S_OK; }
     HRESULT STDMETHODCALLTYPE OnUpdateComposition(ITfCompositionView*, ITfRange*) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE OnEndComposition(ITfCompositionView*) override { --compositions; return S_OK; }
@@ -49,5 +51,7 @@ public:
 private:
     ComPtr<ITextStoreACPSink> sink_;
     DWORD lock_ = 0;
+    DWORD pendingLock_ = 0;
+    HWND window_ = nullptr;
 };
 }

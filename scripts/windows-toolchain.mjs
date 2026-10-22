@@ -22,8 +22,8 @@ export function windowsEnvironment(architecture) {
   return environment;
 }
 
-export function runWindows(command, args, { env, cwd = process.cwd(), capture = false } = {}) {
-  const result = spawnSync(command, args, { env, cwd, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit', maxBuffer: 16 * 1024 * 1024 });
+export function runWindows(command, args, { env, cwd = process.cwd(), capture = false, timeout } = {}) {
+  const result = spawnSync(command, args, { env, cwd, timeout, encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit', maxBuffer: 16 * 1024 * 1024 });
   if (capture && result.stderr) process.stderr.write(result.stderr);
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} 실패 (${result.status})`);

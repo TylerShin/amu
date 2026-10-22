@@ -160,6 +160,7 @@ void testRegisteredTsf() {
     std::cout << "PASS: installed TSF profile, keyboard routing, editing, focus and boundaries\n";
 }
 void testCompositionContext() {
+    std::cout << "TEST: real TSF composition context" << std::endl;
     ComPtr<ITfThreadMgrEx> thread;
     check(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&thread)), "composition thread");
     TfClientId client;
@@ -174,6 +175,7 @@ void testCompositionContext() {
         ComPtr<ContextSession> session;
         session.Attach(new ContextSession(document.context.Get(), client, attribute, 1));
         check(session->attach(), "composition sink");
+        std::cout << "TEST: composition edit lock" << std::endl;
         bool consumed = false;
         for (char key : std::string("rkqtk")) check(session->process({0, static_cast<uint32_t>(key)}, consumed), "composition input");
         require(document.store->text == L"갑사", "real TSF composition text");
@@ -208,6 +210,7 @@ int wmain(int argc, wchar_t** argv) {
         if (argc == 2 && std::wstring(argv[1]) == L"--registered") testRegisteredTsf();
         factory.Reset();
         CoUninitialize();
+        require(moduleObjects == 0, "all test documents and queued edit sessions must be released");
         std::cout << "PASS: Windows C ABI, key translation and TSF context checks\n";
         FreeLibrary(library);
         return 0;
