@@ -26,7 +26,8 @@ fn main() {
         compiler.args(["-dynamiclib", "-mmacosx-version-min=13.0", "-install_name"]);
         compiler.arg(&library);
     } else {
-        compiler.arg("-shared");
+        // Strict C11 hides POSIX declarations such as strdup on glibc.
+        compiler.args(["-shared", "-D_POSIX_C_SOURCE=200809L"]);
         compiler.arg(format!("-Wl,-soname,{}", library.display()));
     }
     for file in ["hangulctype.c", "hangulinputcontext.c", "hangulkeyboard.c"] {

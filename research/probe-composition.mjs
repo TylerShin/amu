@@ -69,8 +69,11 @@ function prepareReferenceSource() {
 function compileReferenceProbe() {
   mkdirSync(BUILD, { recursive: true });
   const hangul = resolve(SOURCE, 'hangul');
+  const featureFlags = [];
+  if (process.platform === 'linux') featureFlags.push('-D_POSIX_C_SOURCE=200809L');
   run('clang', [
     '-std=c11', '-O2', '-Wall', '-Wextra', '-DENABLE_EXTERNAL_KEYBOARDS=0',
+    ...featureFlags,
     '-I', hangul,
     resolve(ROOT, 'research/trace-libhangul.c'),
     ...['hangulctype.c', 'hangulinputcontext.c', 'hangulkeyboard.c'].map((file) => resolve(hangul, file)),
