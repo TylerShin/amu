@@ -69,6 +69,8 @@ GitHub Actions는 전체 커밋 SHA에 고정하고 Dependabot이 갱신 PR을 �
 
 Rust·Node.js·actionlint·gitleaks는 `mise.toml`, mise 자체는 CI 설정에 고정한다. Cargo·Actions 이외의 버전은 유지보수자가 변경 PR로 올린다. libhangul·모델 변경에는 원본 리비전, 라이선스, SHA-256, 재현 결과를 함께 갱신한다. CI의 도구 설치가 사용하는 네트워크와 제품의 로컬 입력 경로는 별개다.
 
+CI의 mise 캐시는 비활성화한다. 현재 Rust 백엔드의 실제 toolchain은 mise 설치 경로 밖의 `RUSTUP_HOME`에 있어, mise 캐시만 복원하면 rustfmt·clippy 설치가 누락될 수 있다. 캐시를 도입하려면 toolchain과 구성 요소까지 복원되는지 재실행에서 확인한다.
+
 `secrets:check`는 Git 인덱스의 파일을 임시 디렉터리에 내보내 gitleaks로 검사하고 삭제한다. 결과에는 비밀값을 가려 출력한다. 작업 디렉터리의 미추적 파일이나 전체 과거 이력까지 검사하는 명령은 아니다. 이미 커밋된 과거 유출이 의심되면 별도로 `gitleaks git --redact`로 이력을 확인하고 노출된 인증정보를 폐기한다.
 
 ## 릴리스

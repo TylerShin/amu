@@ -15,6 +15,7 @@
 ### 수정
 
 - Linux의 C11 빌드에서 libhangul이 사용하는 POSIX 함수 선언을 활성화해 공통 코어의 빌드 실패를 수정.
+- CI 재실행에서 Rust 도구 캐시 복원 후 rustfmt·clippy가 누락되는 문제를 수정.
 
 ### 제약
 

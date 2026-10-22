@@ -32,6 +32,9 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
           version: "2025.12.9"
+          # Rust 도구 본체는 mise 캐시 밖의 RUSTUP_HOME에 설치된다.
+          # 설치 표시만 복원하면 rustfmt·clippy가 빠지므로 새로 설치한다.
+          cache: false
       - name: 공개 파일·문서·모델 검사
         run: mise run repo:check
       - name: 워크플로와 비밀정보 검사
