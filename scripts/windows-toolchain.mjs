@@ -10,7 +10,7 @@ export function windowsEnvironment(architecture) {
   const installation = execFileSync(vswhere, ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' }).trim();
   if (!installation || /["%\r\n]/.test(installation)) throw new Error('유효한 MSVC 설치를 찾지 못했습니다.');
   const command = `""${resolve(installation, 'Common7/Tools/VsDevCmd.bat')}" -no_logo -arch=${architecture} -host_arch=x64 >nul && set"`;
-  const variables = execFileSync(process.env.ComSpec, ['/d', '/s', '/c', command], { encoding: 'utf8' });
+  const variables = execFileSync(process.env.ComSpec, ['/d', '/s', '/c', command], { encoding: 'utf8', windowsVerbatimArguments: true });
   const environment = { ...process.env };
   for (const line of variables.split(/\r?\n/)) {
     const index = line.indexOf('=');

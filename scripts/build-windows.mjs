@@ -36,8 +36,10 @@ function buildArchitecture(architecture, directory) {
   const testSources = ['windows/tests/smoke.cpp', 'windows/tests/text_store.cpp', 'windows/src/core_session.cpp', 'windows/src/key_input.cpp', 'windows/src/dependency_loader.cpp'].map((file) => resolve(ROOT, file));
   runWindows('cl.exe', [...flags, ...testSources, '/Fe:amu-check.exe', '/link', '/DELAYLOAD:hangul.dll', ...libraries], { env, cwd: destination });
   // Runtime DLLs are copied app-locally; a home PC does not need Visual Studio.
-  const redist = resolve(env.VCToolsRedistDir, architecture, 'Microsoft.VC143.CRT');
-  if (!existsSync(redist)) throw new Error(`MSVC 런타임을 찾지 못했습니다: ${redist}`);
+  const redistRoot = resolve(env.VCToolsRedistDir, architecture);
+  const runtime = readdirSync(redistRoot).find((name) => /^Microsoft\.VC\d+\.CRT$/.test(name));
+  if (!runtime) throw new Error(`MSVC 런타임을 찾지 못했습니다: ${redistRoot}`);
+  const redist = resolve(redistRoot, runtime);
   for (const file of readdirSync(redist).filter((name) => name.endsWith('.dll'))) cpSync(resolve(redist, file), resolve(destination, file));
   runWindows(resolve(destination, 'amu-check.exe'), [], { env, cwd: destination });
 }
