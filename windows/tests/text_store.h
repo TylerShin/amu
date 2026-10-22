@@ -48,6 +48,8 @@ public:
     HRESULT STDMETHODCALLTYPE OnEndComposition(ITfCompositionView*) override { --compositions; return S_OK; }
     void moveCaret(LONG position);
     void insertFromHost(const std::wstring& value);
+    HWND window() const { return window_; }
+    void focusForTyping() { ShowWindow(window_, SW_SHOW); SetForegroundWindow(window_); SetFocus(window_); }
 private:
     ComPtr<ITextStoreACPSink> sink_;
     DWORD lock_ = 0;

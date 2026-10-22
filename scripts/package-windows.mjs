@@ -38,7 +38,15 @@ function main() {
   // Exercise the shipped installer on an ephemeral CI machine, never the developer's PC.
   if (process.env.GITHUB_ACTIONS === 'true') {
     execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve('windows/tests/installer.ps1')], { stdio: 'inherit' });
-    for (const action of ['Install', 'Status', 'Uninstall']) execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve(directory, 'Install.ps1'), '-Action', action], { stdio: 'inherit' });
+    for (const action of ['Install', 'Status', 'Uninstall']) {
+      execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve(directory, 'Install.ps1'), '-Action', action], { stdio: 'inherit', timeout: 120_000 });
+      if (action === 'Install') {
+        for (const architecture of ['x64', 'x86']) {
+          const check = resolve(process.env.ProgramFiles, 'Amu/versions', build.identifier, architecture, 'amu-check.exe');
+          execFileSync(check, ['--registered'], { stdio: 'inherit', timeout: 60_000 });
+        }
+      }
+    }
   }
   const output = resolve('dist/release-windows');
   mkdirSync(output, { recursive: true });

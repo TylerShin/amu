@@ -26,6 +26,8 @@ struct Document {
         TfEditCookie cookie;
         check(manager->CreateContext(client, 0, static_cast<ITextStoreACP*>(store.Get()), &context, &cookie), "CreateContext");
         check(manager->Push(context.Get()), "Push context");
+        ComPtr<ITfDocumentMgr> previous;
+        check(thread->AssociateFocus(store->window(), manager.Get(), &previous), "associate document window");
     }
     ~Document() { manager->Pop(TF_POPF_ALL); }
 };
@@ -37,6 +39,12 @@ bool keyDown(ITfKeystrokeMgr* keys, ITfContext*, WPARAM key, bool shift = false,
     BOOL tested = FALSE, eaten = FALSE;
     check(keys->TestKeyDown(key, 0, &tested), "OnTestKeyDown");
     if (tested) check(keys->KeyDown(key, 0, &eaten), "OnKeyDown");
+    if (!tested && key >= 'A' && key <= 'Z' && !control) {
+        CLSID foreground{};
+        auto result = keys->GetForeground(&foreground);
+        std::cerr << "TEST: key route did not select Amu; foreground match=" << (foreground == ServiceId)
+            << " result=0x" << std::hex << result << std::dec << '\n';
+    }
     return eaten != FALSE;
 }
 void type(ITfKeystrokeMgr* keys, ITfContext* context, const char* text) {
@@ -59,6 +67,7 @@ void testCoreAndKeys() {
     require(translateKey('A', {false, true, false, false, false}).action == KeyAction::finish, "Ctrl shortcut");
 }
 void testRegisteredTsf() {
+    std::cout << "TEST: installed profile and focused TSF document" << std::endl;
     ComPtr<ITfThreadMgrEx> thread;
     check(CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&thread)), "TSF thread manager");
     TfClientId client;
@@ -79,6 +88,7 @@ void testRegisteredTsf() {
     check(thread.As(&keys), "TSF keystroke manager");
     {
         Document document(thread.Get(), client);
+        document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "Set focus");
         type(keys.Get(), document.context.Get(), "dkssud");
         require(document.store->text == L"안녕", "TSF Hangul composition");
@@ -98,6 +108,7 @@ void testRegisteredTsf() {
         type(keys.Get(), document.context.Get(), "AI");
         require(document.store->text == L"안녕AI", "uppercase survives denied edit");
         Document other(thread.Get(), client);
+        other.store->focusForTyping();
         check(thread->SetFocus(other.manager.Get()), "switch focus");
         pump();
         require(document.store->text == L"안녕AI", "focus preserves previous document");
@@ -123,6 +134,7 @@ void testRegisteredTsf() {
     }
     {
         Document document(thread.Get(), client);
+        document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "long input focus");
         require(keyDown(keys.Get(), document.context.Get(), VK_F3, true, true), "English mode shortcut");
         std::string letters(513, 'a');
@@ -134,6 +146,7 @@ void testRegisteredTsf() {
     }
     {
         Document document(thread.Get(), client);
+        document.store->focusForTyping();
         check(thread->SetFocus(document.manager.Get()), "mixed sentence focus");
         require(keyDown(keys.Get(), document.context.Get(), VK_F1, true, true), "auto mode shortcut");
         type(keys.Get(), document.context.Get(), "tkatjdsdi");
@@ -200,10 +213,18 @@ int wmain(int argc, wchar_t** argv) {
         auto getFactory = reinterpret_cast<HRESULT (__stdcall*)(REFCLSID, REFIID, void**)>(GetProcAddress(library, "DllGetClassObject"));
         require(getFactory != nullptr, "class factory export");
         ComPtr<IClassFactory> factory;
-        if (argc == 2 && std::wstring(argv[1]) == L"--registered") {
+        bool registered = argc == 2 && (std::wstring(argv[1]) == L"--registered" || std::wstring(argv[1]) == L"--verify-registration");
+        if (registered) {
             check(CoGetClassObject(ServiceId, CLSCTX_INPROC_SERVER, nullptr, IID_PPV_ARGS(&factory)), "registered COM class factory");
         } else {
             check(getFactory(ServiceId, IID_PPV_ARGS(&factory)), "class factory");
+        }
+        if (argc == 2 && std::wstring(argv[1]) == L"--verify-registration") {
+            ComPtr<ITfTextInputProcessorEx> service;
+            check(factory->CreateInstance(nullptr, IID_PPV_ARGS(&service)), "registered TSF service");
+            service.Reset(); factory.Reset(); CoUninitialize(); FreeLibrary(library);
+            std::cout << "PASS: registered COM text service loads" << std::endl;
+            return 0;
         }
         testCoreAndKeys();
         testCompositionContext();
