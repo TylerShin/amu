@@ -63,7 +63,7 @@ mise run windows:package
 
 MSVC 설치는 `vswhere`로 찾습니다. Rust 대상은 x64·x86을 설치하고 libhangul을 교체 가능한 DLL로 빌드합니다. 결과는 `dist/release-windows/`이며 압축을 풀어 위의 설치 명령을 사용합니다. `mise run windows:install`은 빌드·검사·패키징 후 설치까지 수행합니다(관리자 PowerShell 필요).
 
-`mise run windows:check`는 Rust 회귀 검사와 x64·x86 네이티브 검사를 수행합니다. 네이티브 검사는 실제 Windows TSF context와 테스트용 문서 저장소에서 조합·삭제·확정·포커스 전환·편집 잠금 거부를 확인합니다. 이것만으로 메모장·브라우저·Electron 등 모든 앱의 호환성을 검증한 것은 아닙니다. 첫 사용 시 메모장에서 위 입력, 삭제, 방향키, 선택 후 입력, 앱 전환을 확인해주세요.
+`mise run windows:check`는 Rust 회귀 검사와 x64·x86 네이티브 검사를 수행합니다. 네이티브 검사는 실제 Windows TSF context와 테스트용 문서 저장소에서 조합·삭제·확정·포커스 전환·편집 잠금 거부를 확인합니다. GitHub Actions의 Windows Server 2025 환경에서는 설치·등록한 Amu 프로필을 활성화해 TSF 키 전달과 제거까지 추가로 검사합니다. 이것만으로 Windows 11의 메모장·브라우저·Electron 등 개별 앱 호환성을 검증한 것은 아닙니다. 첫 사용 시 메모장에서 위 입력, 삭제, 방향키, 선택 후 입력, 앱 전환을 확인해주세요.
 
 ## 라이선스와 복구 자료
 

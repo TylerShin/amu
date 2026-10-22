@@ -125,4 +125,4 @@ libhangul의 조합 검색 근거는 [hangulkeyboard.c](https://github.com/libha
 
 Rust 버전의 단일 관리 위치는 mise.toml이다. 같은 버전을 별도 rust-toolchain.toml에 중복 수기 관리하지 않는다. 나중에 Cargo 프로젝트가 생기면 앱의 Cargo.lock도 커밋하고 `--locked`로 의존성을 재현한다. 도구 버전 갱신은 별도 변경으로 올려 조합/세션 검증을 함께 실행한다. [mise Rust 공식 문서](https://mise.jdx.dev/lang/rust.html)
 
-현재 재현 스크립트는 macOS/Linux의 git·clang을 추가로 사용한다. macOS clang/SDK는 Xcode Command Line Tools 영역이며 mise의 Rust 설치와 별개다. Windows native 입력기·연구용 C 빌드는 아직 검증하지 않았다.
+현재 연구용 재현 스크립트는 macOS/Linux의 git·clang을 추가로 사용한다. macOS clang/SDK는 Xcode Command Line Tools 영역이며 mise의 Rust 설치와 별개다. 연구용 C 스크립트는 Windows에서 검증하지 않았다. Windows 입력기 자체의 MSVC 빌드와 실제 TSF 검사는 별도 CI로 실행하며 [설치·검증 범위](install-windows.md)에 기록한다.

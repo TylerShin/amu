@@ -25,6 +25,8 @@ mise run macos:play
 
 Rust와 Node.js, 저장소 검사 도구는 `mise.toml`에 버전을 고정합니다. Swift와 SDK는 Xcode에서 제공합니다. 전역 도구 버전을 바꾸지 말고 `mise run` 또는 `mise exec -- ...`를 사용하세요. Linux에서는 clang을 준비해 공통 코어를 검사할 수 있지만 Linux 입력기는 아직 없습니다.
 
+Windows에서는 MSVC C++ 데스크톱 개발 도구와 Windows SDK가 필요합니다. [Windows 빌드·설치 안내](docs/install-windows.md)를 따라 `mise run windows:check`로 코어와 TSF 연결을 검사합니다.
+
 ## 변경할 때 지킬 기준
 
 1. **진입점에서 실행 흐름을 보여줍니다.** 입력 확인 → 주요 처리 → 결과 반영·반환 순서로 읽히게 배치합니다. 상수는 import 다음, 보조 함수는 기본적으로 진입점 아래에 둡니다.
@@ -40,7 +42,7 @@ Rust와 Node.js, 저장소 검사 도구는 `mise.toml`에 버전을 고정합�
 
 최종 문자열만으로는 조합 문제를 재현하기 어렵습니다. 아래 내용을 함께 남겨주세요.
 
-- 버전 또는 커밋, macOS 버전, CPU, 입력 대상 앱과 버전.
+- 버전 또는 커밋, OS 버전, CPU, 입력 대상 앱과 버전.
 - Playground인지 시스템 입력기인지, 자동/한글/영문 중 어떤 모드인지.
 - 실제 누른 키열, Shift·Space·Backspace·방향키·클릭 순서.
 - 기대한 표시와 실제 표시, 처음 입력부터 재현되는지 여부.
@@ -62,14 +64,15 @@ mise run repo:check
 |---|---|
 | 한글 조합·판독·세션·C ABI | 의미 있는 회귀 사례와 `mise run core:evaluate` |
 | macOS 연결·빌드·번들 리소스 | `mise run macos:smoke`, 실제 입력 경로 수동 확인 |
-| 설치·패키징 스크립트 | `mise run scripts:test`, `mise run macos:package` |
+| Windows 연결·빌드·등록 | `mise run windows:check`, 실제 입력 경로 수동 확인 |
+| 설치·패키징 스크립트 | `mise run scripts:test`, 해당 OS의 `macos:package` 또는 `windows:package` |
 | GitHub Actions | `mise run workflow:check` |
 | 공개 파일·의존성·인증 관련 | `mise run secrets:check` |
 | 한국어 통계 | `mise run model:korean`, manifest·출처·평가 결과 확인 |
 
 테스트는 사용자에게 보이는 동작과 경계를 검증합니다. 단순 UI·문서 변경이나 함수 배치만을 위해 단위 테스트를 추가하지 않습니다. 문서만 바꾸었다면 저장소·링크 검사로 충분합니다. macOS 자동 검사는 실제 NSTextView를 사용하지만 외부 앱의 전체 IME 동작을 보장하지 않습니다.
 
-`repo:check`와 `secrets:check`는 Git의 추적 파일을 대상으로 합니다. 새 파일은 먼저 `git add`로 포함하고 검사하세요. CI는 저장소 검사, 비밀정보 검사, Rust 검사와 macOS 연결 검사를 실행합니다. 전체 말뭉치 재생성은 일반 CI에서 실행하지 않습니다.
+`repo:check`와 `secrets:check`는 Git의 추적 파일을 대상으로 합니다. 새 파일은 먼저 `git add`로 포함하고 검사하세요. CI는 저장소 검사, 비밀정보 검사, Rust 검사와 macOS·Windows 연결 검사를 실행합니다. Windows 패키지는 CI에서 설치·등록·제거도 검사합니다. 전체 말뭉치 재생성은 일반 CI에서 실행하지 않습니다.
 
 ## PR 보내기
 
