@@ -1,9 +1,11 @@
 use crate::{
-    ComposerError, Language,
+    ComposerError, DecisionStatus, Language,
     context::RecentContext,
+    display_policy::DisplayPolicy,
     korean_buffer::KoreanBuffer,
     korean_initials,
     language::{Decoder, Reading, SegmentOrder},
+    selection::Decision,
 };
 
 const MAX_TOKEN_BYTES: usize = 192;
@@ -22,6 +24,7 @@ pub enum Input {
     Backspace,
     Finish,
     WordBoundary,
+    CycleReading,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,6 +35,13 @@ pub struct Update {
     pub language: Language,
 }
 
+#[derive(Debug)]
+pub struct Interpretation {
+    pub status: DecisionStatus,
+    pub alternative: Option<Language>,
+    pub margin: Option<f32>,
+}
+
 pub struct Session {
     korean: KoreanBuffer,
     mixed_korean: KoreanBuffer,
@@ -39,8 +49,10 @@ pub struct Session {
     context: RecentContext,
     literal: String,
     mode: Mode,
-    reading: Reading,
+    decision: Decision,
     edited: bool,
+    manual: bool,
+    literal_complete: bool,
 }
 
 impl Session {
@@ -52,12 +64,14 @@ impl Session {
             context: RecentContext::default(),
             literal: String::with_capacity(MAX_LITERAL_KEYS),
             mode,
-            reading: if mode == Mode::Korean {
-                Reading::Korean
-            } else {
-                Reading::English
+            decision: match mode {
+                Mode::Auto => Decision::empty(),
+                Mode::Korean => Decision::fixed(Reading::Korean),
+                Mode::English => Decision::fixed(Reading::English),
             },
             edited: false,
+            manual: false,
+            literal_complete: true,
         })
     }
 
@@ -67,6 +81,16 @@ impl Session {
             Input::Letter(_) | Input::Finish => self.finish(),
             Input::Backspace => self.backspace(),
             Input::WordBoundary => self.commit_word(),
+            Input::CycleReading => self.cycle_reading(),
+        }
+    }
+
+    /// Inspect selection evidence without retaining or logging user text.
+    pub fn interpretation(&self) -> Interpretation {
+        Interpretation {
+            status: self.decision.status,
+            alternative: self.decision.alternative.map(Reading::language),
+            margin: self.decision.margin,
         }
     }
 
@@ -88,6 +112,8 @@ impl Session {
         self.decoder.reset();
         self.literal.clear();
         self.edited = false;
+        self.manual = false;
+        self.literal_complete = true;
         self.select_reading();
     }
 
@@ -100,16 +126,24 @@ impl Session {
             commit = self.finish().commit;
         }
         self.literal.push(ascii as char);
-        if self.reading == Reading::Initials {
+        if self.decision.reading == Reading::Initials {
             // Initials retain literal keys, including after deletion. A later
             // vowel can resume normal composition without losing a consonant.
-            self.korean.recompose(&self.literal);
             self.edited = false;
-        } else if self.mode != Mode::English && (!self.edited || self.reading == Reading::Korean) {
+            if self.manual && !korean_initials::can_render(&self.literal) {
+                self.korean.continue_initials(&self.literal);
+                self.decision = Decision::fixed(Reading::Korean);
+                self.literal_complete = false;
+            } else {
+                self.korean.recompose(&self.literal);
+            }
+        } else if self.mode != Mode::English
+            && (!self.edited || self.decision.reading == Reading::Korean)
+        {
             self.korean.append(ascii);
         } else if self.edited
             && matches!(
-                self.reading,
+                self.decision.reading,
                 Reading::Mixed {
                     order: SegmentOrder::EnglishFirst,
                     ..
@@ -118,20 +152,23 @@ impl Session {
         {
             self.mixed_korean.append(ascii);
         }
-        if !self.edited {
+        if self.manual && !self.edited {
+            self.restore_mixed_reading();
+        } else if !self.edited {
             self.select_reading();
         }
         self.update(true, commit)
     }
 
     fn backspace(&mut self) -> Update {
-        let consumed = match self.reading {
+        let consumed = match self.decision.reading {
             Reading::English | Reading::Initials => {
                 self.korean.reset();
                 self.literal.pop().is_some()
             }
             Reading::Korean => {
                 self.literal.clear();
+                self.literal_complete = false;
                 self.korean.backspace()
             }
             Reading::Mixed {
@@ -145,7 +182,8 @@ impl Session {
                     std::mem::swap(&mut self.korean, &mut self.mixed_korean);
                     self.mixed_korean.reset();
                     self.literal.clear();
-                    self.reading = Reading::Korean;
+                    self.literal_complete = false;
+                    self.decision.reading = Reading::Korean;
                 }
                 true
             }
@@ -155,9 +193,11 @@ impl Session {
             } => {
                 let consumed = self.mixed_korean.backspace();
                 self.literal.truncate(boundary);
+                self.literal_complete = false;
                 if self.mixed_korean.byte_len() == 0 {
                     self.korean.reset();
-                    self.reading = Reading::English;
+                    self.literal_complete = true;
+                    self.decision.reading = Reading::English;
                 }
                 consumed
             }
@@ -165,6 +205,9 @@ impl Session {
         // Editing freezes the current interpretation. Replaying fewer raw keys would
         // erase syllable boundaries (갑사 + Backspace must become 갑ㅅ, not 값).
         self.edited = true;
+        self.decision.status = DecisionStatus::Edited;
+        self.decision.alternative = None;
+        self.decision.margin = None;
         if !consumed {
             self.reset();
         } else if self.literal.is_empty() && self.korean.byte_len() == 0 {
@@ -173,21 +216,46 @@ impl Session {
         self.update(consumed, String::new())
     }
 
+    fn cycle_reading(&mut self) -> Update {
+        // After a Korean deletion the original keys no longer describe the
+        // displayed syllable boundaries. Keep that edited composition intact.
+        if self.mode != Mode::Auto || !self.literal_complete || self.literal.is_empty() {
+            return self.update(true, String::new());
+        }
+        self.korean.recompose(&self.literal);
+        let readings = self
+            .decoder
+            .manual_readings(&self.literal, &self.korean, &self.context);
+        let next = readings
+            .iter()
+            .position(|reading| *reading == self.decision.reading)
+            .map_or(0, |index| (index + 1) % readings.len());
+        self.decision = Decision::fixed(readings[next]);
+        self.manual = true;
+        self.edited = false;
+        self.restore_mixed_reading();
+        self.update(true, String::new())
+    }
+
     fn finish(&mut self) -> Update {
         self.context.clear();
         self.commit()
     }
 
     fn commit_word(&mut self) -> Update {
+        let supported = matches!(
+            self.decision.status,
+            DecisionStatus::Supported | DecisionStatus::Explicit
+        );
         let update = self.commit();
         if !update.commit.is_empty() {
-            self.context.observe(update.language);
+            self.context.observe(supported.then_some(update.language));
         }
         update
     }
 
     fn commit(&mut self) -> Update {
-        let language = self.reading.language();
+        let language = self.decision.reading.language();
         let commit = self.preedit();
         self.clear_composition();
         Update {
@@ -203,19 +271,26 @@ impl Session {
             consumed,
             commit,
             preedit: self.preedit(),
-            language: self.reading.language(),
+            language: self.decision.reading.language(),
         }
     }
 
     fn select_reading(&mut self) {
-        self.reading = match self.mode {
-            Mode::Korean => Reading::Korean,
-            Mode::English => Reading::English,
-            Mode::Auto => self
-                .decoder
-                .decide(&self.literal, &self.korean.text(), &self.context),
+        self.decision = match self.mode {
+            Mode::Korean => Decision::fixed(Reading::Korean),
+            Mode::English => Decision::fixed(Reading::English),
+            Mode::Auto => self.decoder.decide(
+                &self.literal,
+                &self.korean,
+                &self.context,
+                DisplayPolicy::after(self.decision.reading, self.literal.len().saturating_sub(1)),
+            ),
         };
-        if let Reading::Mixed { boundary, order } = self.reading {
+        self.restore_mixed_reading();
+    }
+
+    fn restore_mixed_reading(&mut self) {
+        if let Reading::Mixed { boundary, order } = self.decision.reading {
             let korean_keys = match order {
                 SegmentOrder::KoreanFirst => &self.literal[..boundary],
                 SegmentOrder::EnglishFirst => &self.literal[boundary..],
@@ -225,7 +300,7 @@ impl Session {
     }
 
     fn preedit(&self) -> String {
-        match self.reading {
+        match self.decision.reading {
             Reading::English => self.literal.clone(),
             Reading::Korean => self.korean.text(),
             Reading::Initials => korean_initials::render(&self.literal),

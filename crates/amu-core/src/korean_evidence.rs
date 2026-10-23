@@ -1,8 +1,15 @@
+use crate::{korean_buffer::KoreanBuffer, korean_statistics};
+
+const UNCOMBINED_COST: f32 = 7.0;
+const COMPOUND_CODA_COST: f32 = 1.5;
+
 pub(crate) struct KoreanEvidence {
     pub complete: bool,
     pub ordinary: bool,
     pub repeated_jamo: bool,
     pub cost: f32,
+    pub pending_onset: bool,
+    pub active_syllable_supported: bool,
 }
 
 impl KoreanEvidence {
@@ -30,10 +37,35 @@ impl KoreanEvidence {
             complete: !text.is_empty() && uncombined == 0,
             ordinary: !text.is_empty() && uncombined == 0 && unusual_rimes == 0,
             repeated_jamo: uncombined >= 2 && has_repeated_jamo(text),
+            pending_onset: false,
+            active_syllable_supported: false,
             cost: keys as f32
-                + uncombined as f32 * 7.0
-                + compound_codas as f32 * 1.5
+                + uncombined as f32 * UNCOMBINED_COST
+                + compound_codas as f32 * COMPOUND_CODA_COST
                 + unusual_rimes as f32 * 6.0,
+        }
+    }
+
+    pub(crate) fn continue_composition(&mut self, buffer: &KoreanBuffer, competing_word: bool) {
+        self.active_syllable_supported = self.complete
+            && buffer.settled_text().is_empty()
+            && korean_statistics::supports_active_syllable(buffer.active_syllable());
+        self.pending_onset = !competing_word
+            && buffer.pending_onset_prefix().is_some_and(|prefix| {
+                korean_statistics::contains_only_observed_syllables(prefix)
+                    && (korean_statistics::supports_onset_transition(
+                        prefix,
+                        buffer.active_syllable(),
+                    ) || buffer
+                        .active_syllable()
+                        .chars()
+                        .any(|c| "ㄲㄸㅃㅆㅉ".contains(c)))
+            });
+        if self.pending_onset {
+            self.cost -= UNCOMBINED_COST;
+        }
+        if !competing_word && continues_supported_coda(buffer.active_syllable()) {
+            self.cost -= COMPOUND_CODA_COST;
         }
     }
 
@@ -67,7 +99,9 @@ impl KoreanEvidence {
         let explicit_shift = keys.bytes().any(|key| key.is_ascii_lowercase())
             && keys.bytes().any(|key| b"REQTWOP".contains(&key));
         self.complete
-            && (crate::korean_statistics::contains_observed_syllable(text) || explicit_shift)
+            && ((crate::korean_statistics::contains_observed_syllable(text)
+                && crate::korean_statistics::supports_syllables(text))
+                || explicit_shift)
     }
 
     /// A prefix may end mid-syllable. Completed syllables followed by jamo, or
@@ -79,6 +113,23 @@ impl KoreanEvidence {
             || syllables > 1
             || (syllables == 1 && !self.complete)
     }
+}
+
+fn continues_supported_coda(active: &str) -> bool {
+    let Some(character) = active.chars().next().filter(|c| ('가'..='힣').contains(c)) else {
+        return false;
+    };
+    let syllable = character as u32 - 0xac00;
+    let coda = syllable % 28;
+    let simple_coda = match coda {
+        3 => 1,
+        5 | 6 => 4,
+        9..=15 => 8,
+        18 => 17,
+        _ => return false,
+    };
+    let previous = char::from_u32(character as u32 - coda + simple_coda).unwrap();
+    korean_statistics::contains_only_observed_syllables(&previous.to_string())
 }
 
 fn has_repeated_jamo(text: &str) -> bool {

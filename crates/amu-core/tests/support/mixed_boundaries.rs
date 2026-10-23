@@ -31,7 +31,7 @@ pub const KOREAN_WORDS: &[(&str, &str)] = &[
 ];
 pub const ENGLISH_WORDS: &[&str] = &[
     "hello", "github", "florp", "quirk", "quick", "oxygen", "aims", "vivid", "violin", "violet",
-    "quiet", "oxide", "hybrid", "system",
+    "quiet", "oxide", "hybrid", "system", "queue", "abacus", "category", "crazy", "drawn",
 ];
 
 // Held out from English word hints. Their spelling must survive both word
@@ -39,5 +39,19 @@ pub const ENGLISH_WORDS: &[&str] = &[
 pub const CONNECTED_ENGLISH_WORDS: &[&str] = &[
     "fallback", "callback", "rollback", "stack", "black", "track", "block", "switch", "catch",
     "fetch", "scratch", "watch", "patch", "sketch", "dispatch", "packet", "macos", "tacos",
-    "nachos", "logos", "solos", "memos", "demos", "radios",
+    "nachos", "logos", "solos", "memos", "demos", "radios", "query", "angry",
+];
+
+// Real and invented identifiers are evaluation inputs, never vocabulary entries.
+pub const IDENTIFIERS: &[&str] = &[
+    "graphql",
+    "GraphQL",
+    "mysql",
+    "MySQL",
+    "postgresql",
+    "PostgreSQL",
+    "florpdb",
+    "vexql",
+    "plintdb",
+    "norgql",
 ];

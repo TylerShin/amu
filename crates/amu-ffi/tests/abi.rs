@@ -127,3 +127,40 @@ fn output_layout_matches_the_public_c_header() {
     assert_eq!(std::mem::size_of::<AmuOutput>(), 2064);
     assert_eq!(std::mem::align_of::<AmuOutput>(), 4);
 }
+
+#[test]
+fn manual_reading_replaces_only_preedit_and_expires_at_a_word_boundary() {
+    let session = amu_session_new(0);
+    let mut output = MaybeUninit::<AmuOutput>::uninit();
+    // SAFETY: this test owns the live handle and disjoint output storage.
+    unsafe {
+        for key in b"dia" {
+            assert_eq!(
+                amu_session_process(session, 0, (*key).into(), output.as_mut_ptr()),
+                0
+            );
+        }
+        assert_eq!(amu_session_process(session, 5, 1, output.as_mut_ptr()), 1);
+        assert_eq!(amu_session_process(session, 5, 0, output.as_mut_ptr()), 0);
+        let corrected = output.assume_init_ref();
+        assert_eq!(corrected.consumed, 1);
+        assert_eq!(corrected.language, 0);
+        assert_eq!(corrected.commit_len, 0);
+        assert_eq!(&corrected.preedit[..corrected.preedit_len as usize], b"dia");
+        assert_eq!(amu_session_process(session, 4, 0, output.as_mut_ptr()), 0);
+        let committed = output.assume_init_ref();
+        assert_eq!(&committed.commit[..committed.commit_len as usize], b"dia");
+        for key in b"gksrmf" {
+            assert_eq!(
+                amu_session_process(session, 0, (*key).into(), output.as_mut_ptr()),
+                0
+            );
+        }
+        let next = output.assume_init_ref();
+        assert_eq!(
+            &next.preedit[..next.preedit_len as usize],
+            "한글".as_bytes()
+        );
+        amu_session_free(session);
+    }
+}

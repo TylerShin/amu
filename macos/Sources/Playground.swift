@@ -17,7 +17,7 @@ final class Playground: NSObject, NSWindowDelegate {
         heading.frame = NSRect(x: 28, y: 422, width: 600, height: 30)
         heading.autoresizingMask = [.width, .minYMargin]
         container.addSubview(heading)
-        let note = NSTextField(labelWithString: "예: hello dkssud → hello 안녕 · 자동 판독은 기초 규칙을 사용하는 실험 버전입니다.")
+        let note = NSTextField(labelWithString: "⌃⇧Space 현재 단어 교정 · ⌃⇧F1 자동 · ⌃⇧F2 한글 고정 · ⌃⇧F3 영문 고정")
         note.frame = NSRect(x: 28, y: 388, width: 724, height: 24)
         note.textColor = .secondaryLabelColor
         note.autoresizingMask = [.width, .minYMargin]
@@ -33,6 +33,7 @@ final class Playground: NSObject, NSWindowDelegate {
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         let input = TypingView(frame: scroll.contentView.bounds)
+        input.coordinator.modeDidChange = { [weak modes] mode in modes?.selectedSegment = Int(mode.rawValue) }
         input.font = .systemFont(ofSize: 24)
         input.isRichText = false
         input.isAutomaticQuoteSubstitutionEnabled = false
@@ -54,6 +55,11 @@ final class Playground: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) { NSApp.terminate(nil) }
+
+    func windowDidResignKey(_ notification: Notification) {
+        guard let input else { return }
+        input.coordinator.changeMode(.auto, client: input)
+    }
 
     @objc private func changeMode(_ sender: NSSegmentedControl) {
         guard let input, let mode = InputMode(rawValue: UInt32(sender.selectedSegment)) else { return }

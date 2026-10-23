@@ -19,9 +19,11 @@ function main() {
 }
 
 function verifyModelChecksum() {
-  const manifest = JSON.parse(readFileSync('models/korean/manifest.json', 'utf8'));
-  const actual = createHash('sha256').update(readFileSync('models/korean/syllables.tsv')).digest('hex');
-  if (actual !== manifest.modelSha256) throw new Error('Korean model checksum differs from manifest.json');
+  for (const [directory, filename] of [['korean', 'syllables.tsv'], ['initials', 'pairs.tsv']]) {
+    const manifest = JSON.parse(readFileSync(`models/${directory}/manifest.json`, 'utf8'));
+    const actual = createHash('sha256').update(readFileSync(`models/${directory}/${filename}`)).digest('hex');
+    if (actual !== manifest.modelSha256) throw new Error(`${directory} model checksum differs from manifest.json`);
+  }
 }
 
 function verifyLocalLinks(file) {

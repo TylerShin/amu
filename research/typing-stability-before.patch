@@ -1,0 +1,769 @@
+--- a/crates/amu-core/src/display_policy.rs
++++ /dev/null
+@@ -1,69 +0,0 @@
+-use crate::language::{Reading, SegmentOrder};
+-
+-const REINTERPRETED_KEY_COST: f32 = 0.75;
+-const MAX_REVISION_COST: f32 = 2.0;
+-
+-/// A bounded cost for converting already displayed Latin keys on weak evidence.
+-/// Recovering literal text stays possible; supported whole Korean and Korean
+-/// prefixes are exempt at the call site. Explicit selection and deletion bypass automatic selection.
+-#[derive(Clone, Copy, Default)]
+-pub(crate) struct DisplayPolicy {
+-    previous: Option<Reading>,
+-    established_keys: usize,
+-}
+-
+-impl DisplayPolicy {
+-    pub(crate) fn after(previous: Reading, previous_keys: usize) -> Self {
+-        Self {
+-            previous: Some(previous),
+-            established_keys: previous_keys,
+-        }
+-    }
+-
+-    pub(crate) fn revision_cost(self, reading: Reading) -> f32 {
+-        // Restoring raw input and composing initials do not reinterpret an
+-        // established Latin span as a Korean syllable.
+-        if matches!(reading, Reading::English | Reading::Initials) {
+-            return 0.0;
+-        }
+-        let Some(previous) = self.previous else {
+-            return 0.0;
+-        };
+-        let changed = (0..self.established_keys)
+-            .filter(|key| is_english(previous, *key) && !is_english(reading, *key))
+-            .count();
+-        (changed as f32 * REINTERPRETED_KEY_COST).min(MAX_REVISION_COST)
+-    }
+-
+-    pub(crate) fn continues_korean(self, boundary: usize) -> bool {
+-        matches!((self.previous, boundary), (Some(Reading::Korean), 0))
+-            || self.previous
+-                == Some(Reading::Mixed {
+-                    boundary,
+-                    order: SegmentOrder::EnglishFirst,
+-                })
+-    }
+-
+-    pub(crate) fn continues_english(self) -> bool {
+-        self.previous == Some(Reading::English)
+-    }
+-
+-    pub(crate) fn continues_initials(self) -> bool {
+-        self.previous == Some(Reading::Initials)
+-    }
+-}
+-
+-fn is_english(reading: Reading, key: usize) -> bool {
+-    match reading {
+-        Reading::English => true,
+-        Reading::Korean | Reading::Initials => false,
+-        Reading::Mixed {
+-            boundary,
+-            order: SegmentOrder::EnglishFirst,
+-        } => key < boundary,
+-        Reading::Mixed {
+-            boundary,
+-            order: SegmentOrder::KoreanFirst,
+-        } => key >= boundary,
+-    }
+-}
+--- a/crates/amu-core/src/english.rs
++++ b/crates/amu-core/src/english.rs
+@@ -19,8 +19,6 @@
+     pub prefix_hint: bool,
+     pub capitals: bool,
+     pub connected_spelling: bool,
+-    pub open_spelling: bool,
+-    pub complete_spelling: bool,
+ }
+
+ pub(crate) fn initialize() {
+@@ -40,8 +38,6 @@
+         && keys.bytes().all(|key| key.is_ascii_uppercase())
+         && keys.bytes().any(|key| !b"REQTWOP".contains(&key));
+     let connected_spelling = model.has_connected_spelling(lowercase.as_bytes());
+-    let open_spelling = model.has_spelling(lowercase.as_bytes(), true);
+-    let complete_spelling = connected_spelling || has_simple_word_shape(lowercase.as_bytes());
+     let mut cost = model.spelling_cost(lowercase.as_bytes());
+     if has_simple_word_shape(lowercase.as_bytes()) || (keys.len() >= 4 && connected_spelling) {
+         cost = cost.min(length * 1.1);
+@@ -73,8 +69,6 @@
+         prefix_hint,
+         capitals,
+         connected_spelling,
+-        open_spelling,
+-        complete_spelling,
+     }
+ }
+
+@@ -104,19 +98,14 @@
+ }
+
+ impl EnglishEvidence {
+-    pub(crate) fn continues_spelling(
+-        &self,
+-        keys: &str,
+-        boundary: usize,
+-        prefix_composes_korean: bool,
+-    ) -> bool {
++    pub(crate) fn continues_spelling(&self, keys: &str, boundary: usize) -> bool {
+         let lowercase = keys.to_ascii_lowercase();
+         // A short prefix can gain word evidence from the next unambiguous
+         // English vowel. A consonant-only continuation still needs a stem.
+         let adds_vowel = lowercase.as_bytes()[boundary..]
+             .iter()
+             .any(|key| b"aeiou".contains(key));
+-        (self.connected_spelling || (!prefix_composes_korean && self.open_spelling) || adds_vowel)
++        (self.connected_spelling || adds_vowel)
+             && MODEL
+                 .get_or_init(EnglishModel::train)
+                 .has_connected_spelling(lowercase.as_bytes())
+@@ -202,19 +191,12 @@
+     }
+
+     fn has_connected_spelling(&self, keys: &[u8]) -> bool {
+-        self.has_spelling(keys, false)
+-    }
+-
+-    fn has_spelling(&self, keys: &[u8], open: bool) -> bool {
+         // Two-letter initialisms do not establish the same continuity as a word.
+-        if keys.len() < if open { 2 } else { 3 } {
++        if keys.len() < 3 {
+             return false;
+         }
+         let vowels = vowel_count(keys);
+-        if vowels == 0 {
+-            return open && is_onset(keys);
+-        }
+-        if vowels * 5 > keys.len() * 3 {
++        if vowels == 0 || vowels * 5 > keys.len() * 3 {
+             return false;
+         }
+         let mut index = 0;
+@@ -233,7 +215,7 @@
+             let cluster = &keys[start..index];
+             let supported = if start == 0 {
+                 is_onset(cluster)
+-            } else if index == keys.len() && !open {
++            } else if index == keys.len() {
+                 self.codas.contains(cluster)
+             } else {
+                 // Compound boundaries can join a coda to another onset. The
+--- a/crates/amu-core/src/korean_buffer.rs
++++ b/crates/amu-core/src/korean_buffer.rs
+@@ -59,20 +59,4 @@
+     pub(crate) fn byte_len(&self) -> usize {
+         self.settled.len() + self.syllable.len()
+     }
+-
+-    pub(crate) fn pending_onset_prefix(&self) -> Option<&str> {
+-        let pending = !self.settled.is_empty()
+-            && self.settled.chars().all(|c| ('가'..='힣').contains(&c))
+-            && self.syllable.chars().count() == 1
+-            && self.syllable.chars().all(|c| ('ㄱ'..='ㅎ').contains(&c));
+-        pending.then_some(self.settled.as_str())
+-    }
+-
+-    pub(crate) fn active_syllable(&self) -> &str {
+-        &self.syllable
+-    }
+-
+-    pub(crate) fn settled_text(&self) -> &str {
+-        &self.settled
+-    }
+ }
+--- a/crates/amu-core/src/korean_evidence.rs
++++ b/crates/amu-core/src/korean_evidence.rs
+@@ -1,15 +1,8 @@
+-use crate::{korean_buffer::KoreanBuffer, korean_statistics};
+-
+-const UNCOMBINED_COST: f32 = 7.0;
+-const COMPOUND_CODA_COST: f32 = 1.5;
+-
+ pub(crate) struct KoreanEvidence {
+     pub complete: bool,
+     pub ordinary: bool,
+     pub repeated_jamo: bool,
+     pub cost: f32,
+-    pub pending_onset: bool,
+-    pub active_syllable_supported: bool,
+ }
+
+ impl KoreanEvidence {
+@@ -37,35 +30,10 @@
+             complete: !text.is_empty() && uncombined == 0,
+             ordinary: !text.is_empty() && uncombined == 0 && unusual_rimes == 0,
+             repeated_jamo: uncombined >= 2 && has_repeated_jamo(text),
+-            pending_onset: false,
+-            active_syllable_supported: false,
+             cost: keys as f32
+-                + uncombined as f32 * UNCOMBINED_COST
+-                + compound_codas as f32 * COMPOUND_CODA_COST
++                + uncombined as f32 * 7.0
++                + compound_codas as f32 * 1.5
+                 + unusual_rimes as f32 * 6.0,
+-        }
+-    }
+-
+-    pub(crate) fn continue_composition(&mut self, buffer: &KoreanBuffer, competing_word: bool) {
+-        self.active_syllable_supported = self.complete
+-            && buffer.settled_text().is_empty()
+-            && korean_statistics::supports_active_syllable(buffer.active_syllable());
+-        self.pending_onset = !competing_word
+-            && buffer.pending_onset_prefix().is_some_and(|prefix| {
+-                korean_statistics::contains_only_observed_syllables(prefix)
+-                    && (korean_statistics::supports_onset_transition(
+-                        prefix,
+-                        buffer.active_syllable(),
+-                    ) || buffer
+-                        .active_syllable()
+-                        .chars()
+-                        .any(|c| "ㄲㄸㅃㅆㅉ".contains(c)))
+-            });
+-        if self.pending_onset {
+-            self.cost -= UNCOMBINED_COST;
+-        }
+-        if !competing_word && continues_supported_coda(buffer.active_syllable()) {
+-            self.cost -= COMPOUND_CODA_COST;
+         }
+     }
+
+@@ -115,23 +83,6 @@
+     }
+ }
+
+-fn continues_supported_coda(active: &str) -> bool {
+-    let Some(character) = active.chars().next().filter(|c| ('가'..='힣').contains(c)) else {
+-        return false;
+-    };
+-    let syllable = character as u32 - 0xac00;
+-    let coda = syllable % 28;
+-    let simple_coda = match coda {
+-        3 => 1,
+-        5 | 6 => 4,
+-        9..=15 => 8,
+-        18 => 17,
+-        _ => return false,
+-    };
+-    let previous = char::from_u32(character as u32 - coda + simple_coda).unwrap();
+-    korean_statistics::contains_only_observed_syllables(&previous.to_string())
+-}
+-
+ fn has_repeated_jamo(text: &str) -> bool {
+     let mut characters = text.chars().peekable();
+     let mut has_repetition = false;
+--- a/crates/amu-core/src/korean_statistics.rs
++++ b/crates/amu-core/src/korean_statistics.rs
+@@ -1,7 +1,4 @@
+-use std::{
+-    collections::{HashMap, HashSet},
+-    sync::OnceLock,
+-};
++use std::{collections::HashMap, sync::OnceLock};
+
+ const DATA: &str = include_str!("../../../models/korean/syllables.tsv");
+ const SYLLABLES: usize = 11172;
+@@ -72,33 +69,6 @@
+     })
+ }
+
+-pub(crate) fn supports_active_syllable(text: &str) -> bool {
+-    let mut characters = text.chars();
+-    let Some(character) = characters.next().filter(|c| ('가'..='힣').contains(c)) else {
+-        return false;
+-    };
+-    characters.next().is_none()
+-        && MODEL.get_or_init(SyllableModel::load).initial_vowels[(character as usize - 0xac00) / 28]
+-}
+-
+-/// Project observed syllable pairs onto the next onset, without requiring its
+-/// not-yet-typed vowel. The caller supplies one pending consonant from libhangul.
+-pub(crate) fn supports_onset_transition(prefix: &str, active: &str) -> bool {
+-    let Some(previous) = prefix.chars().last().filter(|c| ('가'..='힣').contains(c)) else {
+-        return false;
+-    };
+-    let Some(onset) = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+-        .chars()
+-        .position(|character| active.starts_with(character))
+-    else {
+-        return false;
+-    };
+-    MODEL
+-        .get_or_init(SyllableModel::load)
+-        .onset_transitions
+-        .contains(&((previous as usize - 0xac00) * 19 + onset))
+-}
+-
+ pub(crate) fn contains_observed_syllable(text: &str) -> bool {
+     let model = MODEL.get_or_init(SyllableModel::load);
+     text.chars().any(|character| {
+@@ -127,7 +97,6 @@
+ struct SyllableModel {
+     unigrams: [f32; SYLLABLES],
+     bigrams: HashMap<usize, f32>,
+-    onset_transitions: HashSet<usize>,
+     initial_vowels: [bool; 19 * 21],
+     vowel_finals: [bool; 21 * 28],
+     attachments: [f32; SYLLABLES],
+@@ -138,7 +107,6 @@
+         let mut model = Self {
+             unigrams: [UNKNOWN_COST; SYLLABLES],
+             bigrams: HashMap::new(),
+-            onset_transitions: HashSet::new(),
+             initial_vowels: [false; 19 * 21],
+             vowel_finals: [false; 21 * 28],
+             attachments: [MAX_ATTACHMENT_COST; SYLLABLES],
+@@ -164,9 +132,6 @@
+                 }
+                 "B" => {
+                     model.bigrams.insert(key, cost);
+-                    model
+-                        .onset_transitions
+-                        .insert(key / SYLLABLES * 19 + key % SYLLABLES / 588);
+                 }
+                 "A" => model.attachments[key] = cost.min(MAX_ATTACHMENT_COST),
+                 _ => panic!("unknown model row kind"),
+--- a/crates/amu-core/src/language.rs
++++ b/crates/amu-core/src/language.rs
+@@ -1,7 +1,6 @@
+ use crate::{
+     ComposerError,
+     context::RecentContext,
+-    display_policy::DisplayPolicy,
+     english,
+     english_identifier::IdentifierProbe,
+     korean_buffer::KoreanBuffer,
+@@ -57,23 +56,17 @@
+         })
+     }
+
+-    pub(crate) fn decide(
+-        &mut self,
+-        keys: &str,
+-        korean: &KoreanBuffer,
+-        context: &RecentContext,
+-        policy: DisplayPolicy,
+-    ) -> Decision {
++    pub(crate) fn decide(&mut self, keys: &str, korean: &str, context: &RecentContext) -> Decision {
+         if keys.is_empty() {
+             return Decision::empty();
+         }
+-        self.candidates(keys, korean, context, policy).select()
++        self.candidates(keys, korean, context).select()
+     }
+
+     pub(crate) fn manual_readings(
+         &mut self,
+         keys: &str,
+-        korean: &KoreanBuffer,
++        korean: &str,
+         context: &RecentContext,
+     ) -> Vec<Reading> {
+         let korean_reading = if korean_initials::can_render(keys) {
+@@ -81,7 +74,7 @@
+         } else {
+             Reading::Korean
+         };
+-        self.candidates(keys, korean, context, DisplayPolicy::default())
++        self.candidates(keys, korean, context)
+             .manual_readings(korean_reading)
+     }
+
+@@ -90,32 +83,10 @@
+         self.identifiers.reset();
+     }
+
+-    fn candidates(
+-        &mut self,
+-        keys: &str,
+-        korean: &KoreanBuffer,
+-        context: &RecentContext,
+-        policy: DisplayPolicy,
+-    ) -> Candidates {
+-        let korean_text = korean.text();
+-        let mut korean_evidence = KoreanEvidence::assess(&korean_text, keys.len());
+-        let use_capitals = !korean_evidence.explains_capitals(keys, &korean_text);
+-        let mut english_evidence = self.identifiers.assess(keys, use_capitals);
+-        if policy.continues_korean(0) {
+-            korean_evidence.continue_composition(
+-                korean,
+-                english_evidence.complete_spelling
+-                    || english_evidence.word_hint
+-                    || english_evidence.identifier,
+-            );
+-        }
+-        let korean = korean_text.as_str();
+-        // An open English prefix can compete with unfinished Hangul. Once the
+-        // entire Hangul reading is complete, require whole-word English evidence.
+-        if policy.continues_english() && english_evidence.open_spelling && !korean_evidence.complete
+-        {
+-            english_evidence.cost = english_evidence.cost.min(keys.len() as f32 * 1.1);
+-        }
++    fn candidates(&mut self, keys: &str, korean: &str, context: &RecentContext) -> Candidates {
++        let korean_evidence = KoreanEvidence::assess(korean, keys.len());
++        let use_capitals = !korean_evidence.explains_capitals(keys, korean);
++        let english_evidence = self.identifiers.assess(keys, use_capitals);
+         let mut candidates = whole_candidates(
+             keys,
+             korean,
+@@ -123,19 +94,12 @@
+             &english_evidence,
+             context,
+             use_capitals,
+-            policy,
+         );
+         if let Some(cost) = korean_initials::candidate_cost(keys, &english_evidence) {
+-            candidates.consider(Reading::Initials, cost, 0.0);
+-        } else if policy.continues_initials()
+-            && korean_initials::can_render(keys)
+-            && let Some(cost) =
+-                korean_initials::candidate_cost(&keys[..keys.len() - 1], &english_evidence)
+-        {
+-            candidates.consider(Reading::Initials, cost, 0.0);
++            candidates.consider(Reading::Initials, cost);
+         }
+         if keys.len() >= 4 {
+-            self.consider_korean_first(keys, context, &mut candidates, use_capitals, policy);
++            self.consider_korean_first(keys, context, &mut candidates, use_capitals);
+             let whole_korean_supported =
+                 crate::korean_statistics::contains_only_observed_syllables(korean);
+             self.consider_english_first(
+@@ -144,7 +108,6 @@
+                 &mut candidates,
+                 use_capitals,
+                 whole_korean_supported,
+-                policy,
+             );
+         }
+         candidates
+@@ -156,7 +119,6 @@
+         context: &RecentContext,
+         candidates: &mut Candidates,
+         use_capitals: bool,
+-        policy: DisplayPolicy,
+     ) {
+         let whole_english = english::assess(keys, use_capitals);
+         self.probe.reset();
+@@ -169,12 +131,11 @@
+                 continue;
+             }
+             if prefix.complete && suffix.supports_split {
+-                let reading = Reading::Mixed {
+-                    boundary,
+-                    order: SegmentOrder::KoreanFirst,
+-                };
+                 candidates.consider(
+-                    reading,
++                    Reading::Mixed {
++                        boundary,
++                        order: SegmentOrder::KoreanFirst,
++                    },
+                     mixed_cost(
+                         &prefix,
+                         &korean_text,
+@@ -182,11 +143,6 @@
+                         context.cost(Language::Korean),
+                         BoundaryEvidence::Shape,
+                     ),
+-                    if prefix.supports_reading(&keys[..boundary], &korean_text) {
+-                        0.0
+-                    } else {
+-                        policy.revision_cost(reading)
+-                    },
+                 );
+             }
+         }
+@@ -199,10 +155,8 @@
+         candidates: &mut Candidates,
+         use_capitals: bool,
+         whole_korean_supported: bool,
+-        policy: DisplayPolicy,
+     ) {
+-        let whole_english = english::assess(keys, use_capitals);
+-        let whole_english_supported = whole_english.word_hint;
++        let whole_english_supported = english::assess(keys, use_capitals).word_hint;
+         for boundary in 2..keys.len() {
+             let prefix_keys = &keys[..boundary];
+             let suffix_keys = &keys[boundary..];
+@@ -219,21 +173,8 @@
+             }
+             self.probe.recompose(suffix_keys);
+             let korean_text = self.probe.text();
+-            let mut suffix = KoreanEvidence::assess(&korean_text, suffix_keys.len());
+-            // An incomplete suffix needs evidence on both sides of its boundary;
+-            // raw prefix length alone must not keep a mistaken split alive.
+-            if policy.continues_korean(boundary)
+-                && (prefix.complete_spelling
+-                    || prefix.word_hint
+-                    || prefix.identifier
+-                    || prefix.capitals)
+-            {
+-                suffix.continue_composition(
+-                    &self.probe,
+-                    whole_english.complete_spelling || whole_english.word_hint,
+-                );
+-            }
+-            if !suffix.complete && !suffix.pending_onset {
++            let suffix = KoreanEvidence::assess(&korean_text, suffix_keys.len());
++            if !suffix.complete {
+                 continue;
+             }
+             if !prefix.word_hint
+@@ -255,12 +196,11 @@
+             let identifier_cost =
+                 self.identifiers
+                     .boundary_cost(keys, boundary, &korean_text, use_capitals);
+-            let reading = Reading::Mixed {
+-                boundary,
+-                order: SegmentOrder::EnglishFirst,
+-            };
+             candidates.consider(
+-                reading,
++                Reading::Mixed {
++                    boundary,
++                    order: SegmentOrder::EnglishFirst,
++                },
+                 mixed_cost(
+                     &suffix,
+                     &korean_text,
+@@ -268,7 +208,6 @@
+                     context.cost(Language::English),
+                     evidence,
+                 ) + identifier_cost,
+-                policy.revision_cost(reading),
+             );
+         }
+     }
+@@ -303,11 +242,7 @@
+                 return false;
+             }
+             if first == Some(first_syllable) {
+-                return prefix.continues_spelling(
+-                    &keys[..boundary + index + 1],
+-                    boundary,
+-                    prefix_korean.complete,
+-                );
++                return prefix.continues_spelling(&keys[..boundary + index + 1], boundary);
+             }
+         }
+         false
+@@ -340,7 +275,6 @@
+     english_evidence: &english::EnglishEvidence,
+     context: &RecentContext,
+     use_capitals: bool,
+-    policy: DisplayPolicy,
+ ) -> Candidates {
+     let has_korean_support = korean_evidence.supports_reading(keys, korean);
+     // A language prior resolves competing word evidence; it cannot manufacture it.
+@@ -359,15 +293,7 @@
+         korean_cost += context.cost(Language::Korean);
+         english_cost += context.cost(Language::English);
+     }
+-    Candidates::new(
+-        korean_cost,
+-        english_cost,
+-        if has_korean_support {
+-            0.0
+-        } else {
+-            policy.revision_cost(Reading::Korean)
+-        },
+-    )
++    Candidates::new(korean_cost, english_cost)
+ }
+
+ impl Reading {
+@@ -418,8 +344,7 @@
+ }
+
+ fn korean_coverage_cost(keys: &str, text: &str, korean: &KoreanEvidence) -> f32 {
+-    if korean.complete && !korean.active_syllable_supported && !korean.supports_reading(keys, text)
+-    {
++    if korean.complete && !korean.supports_reading(keys, text) {
+         UNSUPPORTED_KOREAN_COST
+     } else {
+         0.0
+--- a/crates/amu-core/src/lib.rs
++++ b/crates/amu-core/src/lib.rs
+@@ -1,6 +1,5 @@
+ mod composer;
+ mod context;
+-mod display_policy;
+ mod english;
+ mod english_identifier;
+ mod initial_statistics;
+--- a/crates/amu-core/src/selection.rs
++++ b/crates/amu-core/src/selection.rs
+@@ -25,11 +25,10 @@
+     runner_up: Candidate,
+     whole: Candidate,
+     mixed: Option<Candidate>,
+-    raw_best: Candidate,
+ }
+
+ impl Candidates {
+-    pub(crate) fn new(korean_cost: f32, english_cost: f32, revision_cost: f32) -> Self {
++    pub(crate) fn new(korean_cost: f32, english_cost: f32) -> Self {
+         let korean = Candidate {
+             reading: Reading::Korean,
+             cost: korean_cost,
+@@ -38,16 +37,7 @@
+             reading: Reading::English,
+             cost: english_cost,
+         };
+-        let raw_best = if english_cost < korean_cost {
+-            english
+-        } else {
+-            korean
+-        };
+-        let korean = Candidate {
+-            cost: korean.cost + revision_cost,
+-            ..korean
+-        };
+-        let (best, runner_up) = if english.cost < korean.cost {
++        let (best, runner_up) = if english_cost < korean_cost {
+             (english, korean)
+         } else {
+             (korean, english)
+@@ -57,30 +47,20 @@
+             runner_up,
+             whole: best,
+             mixed: None,
+-            raw_best,
+         }
+     }
+
+-    pub(crate) fn consider(&mut self, reading: Reading, cost: f32, revision_cost: f32) {
++    pub(crate) fn consider(&mut self, reading: Reading, cost: f32) {
+         let candidate = Candidate { reading, cost };
+-        if candidate.cost < self.raw_best.cost {
+-            self.raw_best = candidate;
+-        }
+-        let candidate = Candidate {
+-            cost: cost + revision_cost,
+-            ..candidate
+-        };
+         if matches!(reading, Reading::Mixed { .. })
+-            && self
+-                .mixed
+-                .is_none_or(|current| candidate.cost < current.cost)
++            && self.mixed.is_none_or(|current| cost < current.cost)
+         {
+             self.mixed = Some(candidate);
+         }
+-        if candidate.cost < self.best.cost {
++        if cost < self.best.cost {
+             self.runner_up = self.best;
+             self.best = candidate;
+-        } else if candidate.cost < self.runner_up.cost {
++        } else if cost < self.runner_up.cost {
+             self.runner_up = candidate;
+         }
+     }
+@@ -96,12 +76,11 @@
+
+     pub(crate) fn select(self) -> Decision {
+         let margin = self.runner_up.cost - self.best.cost;
+-        let status =
+-            if margin >= MIN_CONFIDENCE_MARGIN && self.raw_best.reading == self.best.reading {
+-                DecisionStatus::Supported
+-            } else {
+-                DecisionStatus::Ambiguous
+-            };
++        let status = if margin >= MIN_CONFIDENCE_MARGIN {
++            DecisionStatus::Supported
++        } else {
++            DecisionStatus::Ambiguous
++        };
+         // A transformation must beat the whole reading by a margin. Two close
+         // mixed boundaries can still both be much better than the whole token;
+         // retain the best boundary but do not learn from that uncertain choice.
+@@ -156,24 +135,9 @@
+     use crate::language::SegmentOrder;
+
+     #[test]
+-    fn display_cost_ranks_candidates_without_turning_continuity_into_confidence() {
+-        let mixed = Reading::Mixed {
+-            boundary: 3,
+-            order: SegmentOrder::EnglishFirst,
+-        };
+-        let mut candidates = Candidates::new(9.0, 5.0, 0.0);
+-        candidates.consider(mixed, 4.0, 2.0);
+-        let selected = candidates.select();
+-        assert_eq!(selected.reading, Reading::English);
+-        assert_eq!(selected.alternative, Some(mixed));
+-        assert_eq!(selected.margin, Some(1.0));
+-        assert_eq!(selected.status, DecisionStatus::Ambiguous);
+-    }
+-
+-    #[test]
+     fn a_small_initials_advantage_preserves_literal_and_the_alternative() {
+-        let mut candidates = Candidates::new(16.0, 3.0, 0.0);
+-        candidates.consider(Reading::Initials, 2.5, 0.0);
++        let mut candidates = Candidates::new(16.0, 3.0);
++        candidates.consider(Reading::Initials, 2.5);
+         let selected = candidates.select();
+         assert_eq!(selected.reading, Reading::English);
+         assert_eq!(selected.alternative, Some(Reading::Initials));
+@@ -182,7 +146,7 @@
+
+     #[test]
+     fn ambiguity_does_not_discard_an_existing_whole_korean_composition() {
+-        let selected = Candidates::new(2.0, 2.4, 0.0).select();
++        let selected = Candidates::new(2.0, 2.4).select();
+         assert_eq!(selected.reading, Reading::Korean);
+         assert_eq!(selected.status, DecisionStatus::Ambiguous);
+         assert_eq!(selected.alternative, Some(Reading::English));
+@@ -199,9 +163,9 @@
+             order: SegmentOrder::KoreanFirst,
+         };
+         for order in [[(first, 1.0), (second, 1.2)], [(second, 1.2), (first, 1.0)]] {
+-            let mut candidates = Candidates::new(12.0, 10.0, 0.0);
++            let mut candidates = Candidates::new(12.0, 10.0);
+             for (reading, cost) in order {
+-                candidates.consider(reading, cost, 0.0);
++                candidates.consider(reading, cost);
+             }
+             let selected = candidates.select();
+             assert_eq!(selected.reading, first);
+--- a/crates/amu-core/src/session.rs
++++ b/crates/amu-core/src/session.rs
+@@ -1,7 +1,6 @@
+ use crate::{
+     ComposerError, DecisionStatus, Language,
+     context::RecentContext,
+-    display_policy::DisplayPolicy,
+     korean_buffer::KoreanBuffer,
+     korean_initials,
+     language::{Decoder, Reading, SegmentOrder},
+@@ -223,9 +222,9 @@
+             return self.update(true, String::new());
+         }
+         self.korean.recompose(&self.literal);
+-        let readings = self
+-            .decoder
+-            .manual_readings(&self.literal, &self.korean, &self.context);
++        let readings =
++            self.decoder
++                .manual_readings(&self.literal, &self.korean.text(), &self.context);
+         let next = readings
+             .iter()
+             .position(|reading| *reading == self.decision.reading)
+@@ -279,12 +278,9 @@
+         self.decision = match self.mode {
+             Mode::Korean => Decision::fixed(Reading::Korean),
+             Mode::English => Decision::fixed(Reading::English),
+-            Mode::Auto => self.decoder.decide(
+-                &self.literal,
+-                &self.korean,
+-                &self.context,
+-                DisplayPolicy::after(self.decision.reading, self.literal.len().saturating_sub(1)),
+-            ),
++            Mode::Auto => self
++                .decoder
++                .decide(&self.literal, &self.korean.text(), &self.context),
+         };
+         self.restore_mixed_reading();
+     }

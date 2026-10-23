@@ -6,8 +6,8 @@ enum InputMode: UInt32, CaseIterable {
     var title: String {
         switch self {
         case .auto: return "자동 판독 · 실험"
-        case .korean: return "한글 두벌식"
-        case .english: return "영문"
+        case .korean: return "한글 두벌식 고정"
+        case .english: return "영문 고정"
         }
     }
 }
@@ -19,7 +19,7 @@ struct CompositionUpdate {
 }
 
 enum CoreOperation {
-    case letter(UInt8), backspace, finish, changeMode(InputMode), wordBoundary
+    case letter(UInt8), backspace, finish, changeMode(InputMode), wordBoundary, cycleReading
 
     var abiValues: (kind: UInt32, value: UInt32) {
         switch self {
@@ -28,6 +28,7 @@ enum CoreOperation {
         case .finish: return (2, 0)
         case .changeMode(let mode): return (3, mode.rawValue)
         case .wordBoundary: return (4, 0)
+        case .cycleReading: return (5, 0)
         }
     }
 }

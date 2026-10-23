@@ -46,6 +46,8 @@ function buildBundle(executable, library, playground, build) {
   run('install_name_tool', ['-id', '@rpath/libhangul.dylib', resolve(contents, 'Frameworks/libhangul.dylib')]);
   cpSync(resolve(ROOT, 'third_party/libhangul'), resolve(contents, 'Resources/libhangul-source'), { recursive: true });
   cpSync(resolve(ROOT, 'docs/libhangul-rebuild.md'), resolve(contents, 'Resources/libhangul-rebuild.md'));
+  cpSync(resolve(ROOT, 'models/initials'), resolve(contents, 'Resources/initial-model'), { recursive: true });
+  cpSync(resolve(ROOT, 'scripts/train-initial-model.mjs'), resolve(contents, 'Resources/initial-model/train-initial-model.mjs'));
   cpSync(resolve(ROOT, 'models/korean'), resolve(contents, 'Resources/korean-model'), { recursive: true });
   cpSync(resolve(ROOT, 'scripts/train-korean-model.mjs'), resolve(contents, 'Resources/korean-model/train-korean-model.mjs'));
   cpSync(resolve(ROOT, 'LICENSE'), resolve(contents, 'Resources/Amu-LICENSE.txt'));
