@@ -50,8 +50,8 @@ fn report_initial_expressions() {
     let mut capitals = 0;
     let mut latin = 0;
     for &(keys, text) in initials::EXPRESSIONS {
-        for (name, context) in CONTEXTS {
-            let expected = if name.contains("English") { keys } else { text };
+        for (_, context) in CONTEXTS {
+            let expected = text;
             expressions += usize::from(decode_after(keys, context) == expected);
             let uppercase = keys.to_ascii_uppercase();
             capitals += usize::from(decode_after(&uppercase, context) == uppercase);
@@ -62,6 +62,16 @@ fn report_initial_expressions() {
             latin += usize::from(decode_after(word, context) == word);
         }
     }
+    let mut unresolved = 0;
+    for &(keys, intended) in initials::UNCERTAIN_EXPRESSIONS {
+        for (_, context) in CONTEXTS {
+            unresolved += usize::from(decode_after(keys, context) == intended);
+        }
+    }
+    println!(
+        "uncertain intended initials (reported, not relabelled): {unresolved}/{}",
+        initials::UNCERTAIN_EXPRESSIONS.len() * CONTEXTS.len()
+    );
     let expression_count = initials::EXPRESSIONS.len() * CONTEXTS.len();
     let latin_count = initials::LATIN_COUNTEREXAMPLES.len() * CONTEXTS.len();
     println!("initial expressions with context: {expressions}/{expression_count}");

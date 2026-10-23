@@ -36,7 +36,7 @@ struct SmokeTest {
         verifyShortReadingsAcrossContext(input)
         verifyEnglishFirstBoundaries(input)
         verifyConnectedEnglishSpelling(input)
-        verifyInitialExpressions(input)
+        verifyCompetingShortReadings(input)
         verifyMarkedTextPresentation()
         verifySecureInput()
 
@@ -108,23 +108,27 @@ struct SmokeTest {
         expect(client.writes == 0, "The input method must never write into the secure field")
     }
 
-    private static func verifyInitialExpressions(_ input: TypingView) {
+    private static func verifyCompetingShortReadings(_ input: TypingView) {
         let korean: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f"), (49, " ")]
         let english: [(UInt16, String)] = [(4, "h"), (14, "e"), (37, "l"), (37, "l"), (31, "o"), (49, " ")]
-        let contexts = [(0, korean, "", false), (1, korean, "한글 ", false), (1, english, "hello ", true)]
+        let contexts = [(0, korean, ""), (1, korean, "한글 "), (1, english, "hello ")]
         let expressions: [(String, [(UInt16, String)])] = [
+            ("vs", [(9, "v"), (1, "s")]),
+            ("cs", [(8, "c"), (1, "s")]),
+            ("tv", [(17, "t"), (9, "v")]),
+            ("sg", [(1, "s"), (5, "g")]),
             ("ㄹㅇ", [(3, "f"), (2, "d")]),
             ("ㅇㅈ", [(2, "d"), (13, "w")]),
             ("ㄱㅅ", [(15, "r"), (17, "t")]),
             ("ㄱㅅㄱㅅ", [(15, "r"), (17, "t"), (15, "r"), (17, "t")]),
             ("ㄹㅇㅋㅋ", [(3, "f"), (2, "d"), (6, "z"), (6, "z")]),
         ]
-        for (count, context, before, useLatin) in contexts {
+        for (count, context, before) in contexts {
             for (text, keys) in expressions {
                 reset(input)
                 for _ in 0..<count { press(input, context) }
                 press(input, keys)
-                let selected = useLatin ? keys.map { $0.1 }.joined() : text
+                let selected = text
                 let expected = before + selected
                 expect(input.string == expected && input.hasMarkedText(), "Initial reading: \(expected), actual: \(input.string)")
                 press(input, [(51, "\u{7f}")])

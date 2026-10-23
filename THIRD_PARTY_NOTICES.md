@@ -6,6 +6,11 @@ Amu에서 작성한 코드·문서는 [MIT 라이선스](LICENSE)를 따른다. 
 |---|---|---|---|
 | libhangul 조합 소스 7개 | 두벌식 조합·삭제 | [libhangul/libhangul](https://github.com/libhangul/libhangul/tree/23d2cd9d10d516d523d60c562dbcc7ea08139a09) | [LGPL-2.1-or-later](third_party/libhangul/COPYING) |
 | 한국어 음절 통계 | 혼합 후보의 한글 경계 점수 | [UD Korean GSD](https://github.com/UniversalDependencies/UD_Korean-GSD/tree/7628157f2ba54e0580b2c03e22f1a9f5b111d7e7)의 train 자료를 변환 | [CC BY-SA 4.0](models/korean/LICENSE.txt) |
+| 초성·영문 자음 쌍 통계 | 짧은 자음 입력 후보 비교 | [UD Korean GSD](models/korean/README.md)와 [UD English EWT](models/initials/README.md)의 고정 train 자료를 변환 | [CC BY-SA 4.0](models/initials/LICENSE-english.txt) |
+
+## 초성·영문 자음 쌍 통계
+
+일반 한국어 어형의 초성과 짧은 영문 자음 어형에서 인접 문자 쌍을 집계했다. 기여자·원문 권리·고정 리비전은 [모델 안내](models/initials/README.md), [Korean 고지](models/initials/LICENSE-korean.txt), [English 고지](models/initials/LICENSE-english.txt)에 유지한다. 생성물 `models/initials/pairs.tsv`는 CC BY-SA 4.0이며 애플리케이션 코드와 별개다. 원문·단어 조회표·수동 약어 목록을 배포하지 않는다.
 
 ## libhangul
 

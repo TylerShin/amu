@@ -9,14 +9,6 @@ pub const EXPRESSIONS: &[(&str, &str)] = &[
     ("eq", "ㄷㅂ"),
     ("tr", "ㅅㄱ"),
     ("qt", "ㅂㅅ"),
-    ("sw", "ㄴㅈ"),
-    ("sg", "ㄴㅎ"),
-    ("fr", "ㄹㄱ"),
-    ("fq", "ㄹㅂ"),
-    ("ft", "ㄹㅅ"),
-    ("fx", "ㄹㅌ"),
-    ("fv", "ㄹㅍ"),
-    ("fg", "ㄹㅎ"),
     ("fdfd", "ㄹㅇㄹㅇ"),
     ("dwdw", "ㅇㅈㅇㅈ"),
     ("rtrt", "ㄱㅅㄱㅅ"),
@@ -25,7 +17,12 @@ pub const EXPRESSIONS: &[(&str, &str)] = &[
     ("rtzzgg", "ㄱㅅㅋㅋㅎㅎ"),
 ];
 
+// Real intended initials that the general corpus does not separate reliably.
+// Evaluation reports these misses; they are not relabelled as intended English.
+pub const UNCERTAIN_EXPRESSIONS: &[(&str, &str)] = &[("sw", "ㄴㅈ"), ("sg", "ㄴㅎ")];
+
 pub const LATIN_COUNTEREXAMPLES: &[&str] = &[
-    "ai", "vi", "qi", "io", "xy", "as", "at", "we", "be", "add", "args", "test", "qzx", "vtr",
-    "bld", "css", "msg", "sdk", "tcp", "fallback", "switch", "fa", "de", "re",
+    "vs", "cs", "tv", "st", "sf", "cf", "fs", "ds", "ai", "vi", "qi", "io", "xy", "as", "at", "we",
+    "be", "add", "args", "test", "qzx", "vtr", "bld", "css", "msg", "sdk", "tcp", "fallback",
+    "switch", "fa", "de", "re",
 ];

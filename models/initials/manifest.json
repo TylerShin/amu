@@ -1,0 +1,29 @@
+{
+  "sources": [
+    {
+      "name": "korean-gsd",
+      "language": "Korean",
+      "revision": "7628157f2ba54e0580b2c03e22f1a9f5b111d7e7",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_Korean-GSD/7628157f2ba54e0580b2c03e22f1a9f5b111d7e7/ko_gsd-ud-train.conllu",
+      "sha256": "0bd96ceae934d1089ece599b8904b43b0074df75e41a8e07e4b72264337b39f8",
+      "tokens": 41780,
+      "forms": 24647,
+      "pairs": 62675
+    },
+    {
+      "name": "english-ewt",
+      "language": "English",
+      "revision": "4a4d77f599ea53cc405f85d0cec4b2f14f81d42b",
+      "url": "https://raw.githubusercontent.com/UniversalDependencies/UD_English-EWT/4a4d77f599ea53cc405f85d0cec4b2f14f81d42b/en_ewt-ud-train.conllu",
+      "sha256": "d68e06122a702464c613076523d56740f047e5bbe89dd90ec32737e04d952143",
+      "tokens": 702,
+      "forms": 199,
+      "pairs": 335
+    }
+  ],
+  "license": "CC-BY-SA-4.0",
+  "smoothing": 0.5,
+  "transform": "Distinct FORM types: adjacent unshifted onsets of Hangul-only forms vs adjacent letters of 2-6 letter Latin forms without a/e/i/o/u/y (case folded); no word lookup or labelled expression list",
+  "entries": 676,
+  "modelSha256": "9e8b7a82e1f4b0d1c6a15acd9e5456a18a1f8a03e43d793677be44e6496ad2fc"
+}

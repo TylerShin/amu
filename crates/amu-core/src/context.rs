@@ -10,11 +10,11 @@ pub(crate) struct RecentContext {
 }
 
 impl RecentContext {
-    pub(crate) fn observe(&mut self, language: Language) {
+    pub(crate) fn observe(&mut self, language: Option<Language>) {
         self.votes[self.next] = match language {
-            Language::English => 1,
-            Language::Korean => -1,
-            Language::Mixed => 0,
+            Some(Language::English) => 1,
+            Some(Language::Korean) => -1,
+            Some(Language::Mixed) | None => 0,
         };
         self.next = (self.next + 1) % CONTEXT_WORDS;
     }
