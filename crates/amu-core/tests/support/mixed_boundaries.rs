@@ -38,5 +38,6 @@ pub const ENGLISH_WORDS: &[&str] = &[
 // completion and a later, genuine Korean suffix.
 pub const CONNECTED_ENGLISH_WORDS: &[&str] = &[
     "fallback", "callback", "rollback", "stack", "black", "track", "block", "switch", "catch",
-    "fetch", "scratch", "watch", "patch", "sketch", "dispatch", "packet",
+    "fetch", "scratch", "watch", "patch", "sketch", "dispatch", "packet", "macos", "tacos",
+    "nachos", "logos", "solos", "memos", "demos", "radios",
 ];
