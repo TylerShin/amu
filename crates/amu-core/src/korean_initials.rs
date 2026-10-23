@@ -28,7 +28,7 @@ pub(crate) fn candidate_cost(keys: &str, english: &EnglishEvidence) -> Option<f3
 /// A distinct onset pair, its repetition, or a pair followed by repeated reactions.
 /// Longer arbitrary consonant strings remain ambiguous with Latin initialisms.
 pub(crate) fn has_expression_shape(keys: &str) -> bool {
-    if keys.len() < 2 || !keys.bytes().all(|key| initial(key).is_some()) {
+    if keys.len() < 2 || !can_render(keys) {
         return false;
     }
     let bytes = keys.as_bytes();
@@ -56,6 +56,10 @@ pub(crate) fn render(keys: &str) -> String {
     keys.bytes()
         .map(|key| initial(key).expect("initial reading contains only consonant keys"))
         .collect()
+}
+
+pub(crate) fn can_render(keys: &str) -> bool {
+    keys.bytes().all(|key| initial(key).is_some())
 }
 
 // The unshifted two-set keyboard, not a vocabulary of expressions. Uppercase

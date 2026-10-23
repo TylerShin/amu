@@ -62,7 +62,7 @@ mise run repo:check
 
 | 변경 | 추가 확인 |
 |---|---|
-| 한글 조합·판독·세션·C ABI | 의미 있는 회귀 사례와 `mise run core:evaluate` |
+| 한글 조합·판독·세션·C ABI | 의미 있는 회귀 사례와 `mise run core:evaluate`; 입력 중 판독 변경은 `mise run core:stability`도 비교 |
 | macOS 연결·빌드·번들 리소스 | `mise run macos:smoke`, 실제 입력 경로 수동 확인 |
 | Windows 연결·빌드·등록 | `mise run windows:check`, 실제 입력 경로 수동 확인 |
 | 설치·패키징 스크립트 | `mise run scripts:test`, 해당 OS의 `macos:package` 또는 `windows:package` |

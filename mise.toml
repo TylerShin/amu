@@ -28,6 +28,10 @@ run = "node scripts/train-initial-model.mjs"
 description = "미등록 약어·일반 입력 평가와 Rust 코어 지연 측정"
 run = "cargo run --release -p amu-core --example evaluate_decoder --locked"
 
+[tasks."core:stability"]
+description = "의도별 키 단위 표시 정확도·반복 전환·확정 결과 비교"
+run = "cargo run --release -p amu-core --example evaluate_stability --locked -- crates/amu-core/tests/fixtures/stability.tsv"
+
 [tasks.check]
 description = "Rust 포맷·lint·기능 검사"
 run = ["cargo fmt --all --check", "cargo clippy --workspace --all-targets --locked -- -D warnings", "cargo test --workspace --locked"]

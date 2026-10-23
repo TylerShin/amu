@@ -36,15 +36,115 @@ struct SmokeTest {
         verifyShortReadingsAcrossContext(input)
         verifyEnglishFirstBoundaries(input)
         verifyConnectedEnglishSpelling(input)
+        verifyPerKeyPresentation(input)
         verifyCompetingShortReadings(input)
         verifyMarkedTextPresentation()
         verifySecureInput()
+        verifyManualReadings(input)
+        verifyModeShortcuts()
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, explicit composition style, secure input, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, per-key presentation, explicit composition style, secure input, selection replacement, reentrant finish, manual reading correction, mode shortcuts")
+    }
+
+    private static func verifyPerKeyPresentation(_ input: TypingView) {
+        let cases: [[(UInt16, String, String)]] = [
+            [(37, "l", "l"), (31, "o", "lo"), (8, "c", "loc"), (40, "k", "lock")],
+            [(5, "g", "g"), (40, "k", "하"), (1, "s", "한"), (15, "r", "한ㄱ"), (46, "m", "한그"), (3, "f", "한글")],
+            [(15, "r", "r"), (17, "t", "ㄱㅅ"), (15, "r", "ㄱㅅㄱ"), (17, "t", "ㄱㅅㄱㅅ")]
+        ]
+        for keys in cases {
+            reset(input)
+            input.coordinator.changeMode(.auto, client: input)
+            for (code, letter, expected) in keys {
+                press(input, [(code, letter)])
+                expect(input.string == expected, "Each native key must show \(expected), got \(input.string)")
+                expect(input.hasMarkedText(), "Partial input must remain marked")
+                expect(input.selectedRange().location == expected.utf16.count, "Caret must follow the displayed text")
+            }
+            let shown = input.string
+            press(input, [(49, " ")])
+            expect(input.string == shown + " " && !input.hasMarkedText(), "Space must commit the visible frame once")
+        }
+    }
+
+    private static func verifyManualReadings(_ input: TypingView) {
+        reset(input)
+        input.coordinator.changeMode(.auto, client: input)
+        press(input, [(2, "d"), (34, "i"), (0, "a")])
+        expect(input.string == "얌", "Reproduce an unfamiliar Latin name before manual correction")
+        let correction = keyEvent(49, " ", flags: [.control, .shift])
+        expect(input.coordinator.handle(correction, client: input), "The correction shortcut must not insert Space")
+        expect(input.string == "dia" && input.hasMarkedText(), "Correct the current marked word in place")
+        expect(input.coordinator.handle(keyEvent(49, " ", flags: [.control, .shift], repeatKey: true), client: input), "Holding the shortcut must be consumed")
+        expect(input.string == "dia", "Key repeat must not cycle interpretations repeatedly")
+        press(input, [(51, "\u{7f}"), (0, "a")])
+        expect(input.string == "dia", "A manually chosen Latin reading must survive editing")
+        press(input, [(49, " "), (2, "d"), (40, "k"), (1, "s"), (1, "s"), (32, "u"), (2, "d")])
+        expect(input.string == "dia 안녕", "The following word must return to automatic selection")
+        input.coordinator.finish(client: input)
+        input.coordinator.finish(client: input)
+        expect(input.string == "dia 안녕" && !input.hasMarkedText(), "Manual correction must not duplicate committed text")
+        _ = input.coordinator.handle(correction, client: input)
+        expect(input.string == "dia 안녕" && !input.hasMarkedText(), "The shortcut must not rewrite a committed word")
+
+        reset(input)
+        press(input, [(3, "f"), (2, "d")])
+        expect(input.string == "ㄹㅇ", "Normal initials must keep their existing interpretation")
+        _ = input.coordinator.handle(correction, client: input)
+        expect(input.string == "fd", "The same initials can be explicitly chosen as Latin")
+        _ = input.coordinator.handle(correction, client: input)
+        expect(input.string == "ㄹㅇ", "The user can return to the Korean initials")
+        press(input, [(51, "\u{7f}"), (40, "k")])
+        expect(input.string == "라", "Corrected initials must still compose a syllable")
+
+        reset(input)
+        press(input, [(15, "r"), (40, "k"), (12, "q"), (17, "t"), (40, "k"), (51, "\u{7f}")])
+        _ = input.coordinator.handle(correction, client: input)
+        expect(input.string == "갑ㅅ", "Manual correction must preserve edited syllable boundaries")
+
+        let coordinator = InputCoordinator()
+        let client = PresentationClient()
+        for (code, text) in [(UInt16(2), "d"), (34, "i"), (0, "a")] {
+            _ = coordinator.handle(keyEvent(code, text), client: client)
+        }
+        client.onMark = { coordinator.finish(client: client) }
+        _ = coordinator.handle(correction, client: client)
+        expect(client.commits == ["dia"], "A reentrant host must commit the corrected reading exactly once")
+        client.onMark = nil
+    }
+
+    private static func verifyModeShortcuts() {
+        let coordinator = InputCoordinator()
+        let client = PresentationClient()
+        var selected: [InputMode] = []
+        coordinator.modeDidChange = { selected.append($0) }
+        let shortcuts: [(UInt16, InputMode, String)] = [(99, .english, "gksrmf"), (120, .korean, "한글"), (122, .auto, "한글")]
+        let keys: [(UInt16, String)] = [(5, "g"), (40, "k"), (1, "s"), (15, "r"), (46, "m"), (3, "f")]
+        for (code, mode, expected) in shortcuts {
+            expect(coordinator.handle(keyEvent(code, "", flags: [.control, .shift, .function]), client: client), "Mode selection must consume its function key")
+            expect(coordinator.mode == mode, "The shortcut must select the requested mode directly")
+            for _ in 0..<2 {
+                for (key, text) in keys { _ = coordinator.handle(keyEvent(key, text), client: client) }
+                expect(coordinator.markedText == expected, "A fixed mode must survive word boundaries")
+                _ = coordinator.handle(keyEvent(49, " "), client: client)
+            }
+        }
+        expect(selected == [.english, .korean, .auto], "Mode feedback must track shortcut choices")
+        for flags: NSEvent.ModifierFlags in [[.command, .shift], [.control, .shift, .option], [.shift]] {
+            expect(!coordinator.handle(keyEvent(99, "", flags: flags), client: client), "Other shortcuts must pass through")
+        }
+        expect(coordinator.mode == .auto, "Unrelated modifiers must not change the language mode")
+
+        let secure = InputCoordinator(secureInputEnabled: { true })
+        let password = PresentationClient()
+        for code: UInt16 in [49, 99, 120, 122] {
+            expect(!secure.handle(keyEvent(code, "", flags: [.control, .shift]), client: password), "Secure fields must bypass manual shortcuts too")
+        }
+        expect(password.commits.isEmpty && password.lastMarked == nil && secure.mode == .auto, "Manual commands must never write into a password field")
     }
 
     private static func verifySecureInput() {
@@ -154,6 +254,8 @@ struct SmokeTest {
             ("tacos", [(17, "t"), (0, "a"), (8, "c"), (31, "o"), (1, "s")]),
             ("query", [(12, "q"), (32, "u"), (14, "e"), (15, "r"), (16, "y")]),
             ("angry", [(0, "a"), (45, "n"), (5, "g"), (15, "r"), (16, "y")]),
+            ("graphql", [(5, "g"), (15, "r"), (0, "a"), (35, "p"), (4, "h"), (12, "q"), (37, "l")]),
+            ("florpdb", [(3, "f"), (37, "l"), (31, "o"), (15, "r"), (35, "p"), (2, "d"), (11, "b")]),
         ]
         let suffixes: [(String, [(UInt16, String)])] = [
             ("", []), ("가", [(15, "r"), (40, "k")]),
@@ -359,9 +461,9 @@ struct SmokeTest {
         for (code, text) in keys { input.keyDown(with: keyEvent(code, text)) }
     }
 
-    private static func keyEvent(_ code: UInt16, _ text: String) -> NSEvent {
-        let flags: NSEvent.ModifierFlags = text != text.lowercased() ? [.shift] : []
-        return NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+    private static func keyEvent(_ code: UInt16, _ text: String, flags: NSEvent.ModifierFlags? = nil, repeatKey: Bool = false) -> NSEvent {
+        let modifiers: NSEvent.ModifierFlags = flags ?? (text != text.lowercased() ? [.shift] : [])
+        return NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: 0, context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: repeatKey, keyCode: code)!
     }
 
     private static func reset(_ input: TypingView) {
@@ -396,8 +498,12 @@ private final class ReentrantClient: CompositionClient {
 private final class PresentationClient: CompositionClient {
     var lastMarked: MarkedText?
     var commits: [String] = []
+    var onMark: (() -> Void)?
 
-    func mark(_ text: MarkedText) { lastMarked = text }
+    func mark(_ text: MarkedText) {
+        lastMarked = text
+        onMark?()
+    }
     func commit(_ text: String) { commits.append(text) }
 }
 

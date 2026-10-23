@@ -20,7 +20,10 @@ typedef struct {
 AmuSession *amu_session_new(uint32_t mode);
 void amu_session_free(AmuSession *session);
 /* Kinds: 0 ASCII letter, 1 Backspace, 2 Finish (clear context), 3 change mode,
-   4 word boundary (commit and remember language; caller inserts the space).
+   4 word boundary (commit and remember language; caller inserts the space),
+   5 cycle current reading (value 0; consumes the command without committing).
+   Cycling is available in Auto while the full token's keys are retained.
+   Otherwise it is a consumed no-op. It never rewrites committed text.
    Returns: 0 success, 1 invalid arguments, 2 engine failure.
    Output is valid only on success. Strings are length-delimited UTF-8.
    After engine failure, discard the handle. Calls must be exclusive and occur

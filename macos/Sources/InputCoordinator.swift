@@ -15,6 +15,7 @@ final class InputCoordinator {
     private var applying = false
     private var finishRequested = false
     private(set) var mode: InputMode = .auto
+    var modeDidChange: ((InputMode) -> Void)?
 
     var markedText: String { discardIfSecureInput() ? "" : lastMarked }
 
@@ -28,6 +29,10 @@ final class InputCoordinator {
         guard !discardIfSecureInput() else { return false }
         guard event.type == .keyDown, !applying, let session else { return false }
         let key = KeyTranslator.translate(event)
+        if case .changeMode(let mode) = key {
+            return event.isARepeat || changeMode(mode, client: client)
+        }
+        if case .cycleReading = key, event.isARepeat { return true }
         do {
             let update = try session.process(key)
             return apply(update, client: client)
@@ -45,13 +50,20 @@ final class InputCoordinator {
         catch { recover(client: client) }
     }
 
-    func changeMode(_ mode: InputMode, client: CompositionClient) {
-        guard !discardIfSecureInput() else { return }
-        guard !applying, let session else { return }
+    @discardableResult
+    func changeMode(_ mode: InputMode, client: CompositionClient) -> Bool {
+        guard !discardIfSecureInput() else { return false }
+        guard !applying, let session else { return false }
         do {
-            apply(try session.process(.changeMode(mode)), client: client)
+            let update = try session.process(.changeMode(mode))
             self.mode = mode
-        } catch { recover(client: client) }
+            apply(update, client: client)
+            modeDidChange?(mode)
+            return true
+        } catch {
+            recover(client: client)
+            return false
+        }
     }
 
     func reset() {

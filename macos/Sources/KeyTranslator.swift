@@ -2,6 +2,16 @@ import AppKit
 
 enum KeyTranslator {
     static func translate(_ event: NSEvent) -> CoreOperation {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if modifiers == [.control, .shift] {
+            switch event.keyCode {
+            case 49: return .cycleReading
+            case 122: return .changeMode(.auto)
+            case 120: return .changeMode(.korean)
+            case 99: return .changeMode(.english)
+            default: break
+            }
+        }
         let shortcutFlags: NSEvent.ModifierFlags = [.command, .control, .option]
         if !event.modifierFlags.intersection(shortcutFlags).isEmpty {
             return .finish

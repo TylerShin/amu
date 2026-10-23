@@ -199,7 +199,10 @@ fn composable_english_is_reconsidered_before_commit_and_survives_editing() {
 
 #[test]
 fn unregistered_english_spelling_survives_composable_endings() {
-    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS
+        .iter()
+        .chain(mixed_boundaries::IDENTIFIERS)
+    {
         assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));
         for context in CONTEXTS {
             let mut session = session_after(context);
@@ -216,8 +219,34 @@ fn unregistered_english_spelling_survives_composable_endings() {
 }
 
 #[test]
+fn identifier_correction_and_korean_suffix_editing_preserve_both_intentions() {
+    let mut session = Session::new(Mode::Auto).unwrap();
+    assert_eq!(type_keys(&mut session, "graphql"), "graphql");
+    assert_eq!(session.process(Input::CycleReading).preedit, "graph비");
+    session.process(Input::Finish);
+    for word in ["graphql", "florpdb"] {
+        let mut session = Session::new(Mode::Auto).unwrap();
+        assert_eq!(type_keys(&mut session, word), word);
+        assert_eq!(type_keys(&mut session, "rkqtk"), format!("{word}갑사"));
+        for remaining in ["갑ㅅ", "갑", ""] {
+            assert_eq!(
+                session.process(Input::Backspace).preedit,
+                format!("{word}{remaining}")
+            );
+        }
+        assert_eq!(session.process(Input::WordBoundary).commit, word);
+        assert_eq!(type_keys(&mut session, "fd"), "ㄹㅇ");
+        session.process(Input::WordBoundary);
+        assert_eq!(type_keys(&mut session, "djEjfRK"), "어떨까");
+    }
+}
+
+#[test]
 fn a_korean_suffix_starts_after_the_complete_english_spelling() {
-    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS
+        .iter()
+        .chain(mixed_boundaries::IDENTIFIERS)
+    {
         for &(keys, korean) in mixed_boundaries::KOREAN_SUFFIXES {
             for context in CONTEXTS {
                 let mut session = session_after(context);
@@ -541,6 +570,7 @@ fn mixed_edit_sequences_remain_bounded_and_reset_cleanly() {
             0..=2 => Input::Backspace,
             3 => Input::WordBoundary,
             4 => Input::Finish,
+            5 => Input::CycleReading,
             _ => Input::Letter(b'a' + ((seed >> 32) % 26) as u8),
         };
         let update = session.process(input);

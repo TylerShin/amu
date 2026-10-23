@@ -22,7 +22,7 @@ Amu에서 작성한 코드·문서는 [MIT 라이선스](LICENSE)를 따른다. 
 
 참고 문헌: Jayeol Chun, Na-Rae Han, Jena D. Hwang, Jinho D. Choi, *Building Universal Dependency Treebanks in Korean*, LREC 2018. 원본 자료의 추가 출처 표시는 upstream README를 따른다.
 
-Amu는 한글로만 이루어진 FORM 토큰에서 음절·인접 음절 쌍을 세고 평활화한 점수로 변환했다. 이 변환 데이터인 `models/korean/syllables.tsv`에도 CC BY-SA 4.0을 적용한다. 원문 문장이나 영문 약어 목록은 모델에 포함하지 않는다. [변환 설명](models/korean/README.md), [리비전·SHA-256](models/korean/manifest.json), [재생성 스크립트](scripts/train-korean-model.mjs)를 제공한다.
+Amu는 한글로만 이루어진 FORM 토큰에서 음절·인접 음절 쌍을 세고 평활화한 점수로 변환했다. 같은 토큰의 정렬된 LEMMA/XPOS에서 조사·어미(J/E)의 첫 음절도 집계해 경계 비용을 추가했다. 이 변환 데이터인 `models/korean/syllables.tsv`에도 CC BY-SA 4.0을 적용한다. 원문 문장이나 영문 약어 목록은 모델에 포함하지 않는다. [변환 설명](models/korean/README.md), [리비전·SHA-256](models/korean/manifest.json), [재생성 스크립트](scripts/train-korean-model.mjs)를 제공한다.
 
 앱에는 통계·출처·라이선스·재생성 스크립트를 함께 넣는다. 원본 말뭉치는 다운로드 캐시에만 저장한다. 빌드에 포함된 모델 데이터의 조건은 Amu 코드의 MIT 표기와 별도로 유지한다.
 

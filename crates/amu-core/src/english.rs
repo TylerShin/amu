@@ -13,11 +13,14 @@ static MODEL: OnceLock<EnglishModel> = OnceLock::new();
 
 pub(crate) struct EnglishEvidence {
     pub cost: f32,
+    pub identifier: bool,
     pub supports_split: bool,
     pub word_hint: bool,
     pub prefix_hint: bool,
     pub capitals: bool,
     pub connected_spelling: bool,
+    pub open_spelling: bool,
+    pub complete_spelling: bool,
 }
 
 pub(crate) fn initialize() {
@@ -37,6 +40,8 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
         && keys.bytes().all(|key| key.is_ascii_uppercase())
         && keys.bytes().any(|key| !b"REQTWOP".contains(&key));
     let connected_spelling = model.has_connected_spelling(lowercase.as_bytes());
+    let open_spelling = model.has_spelling(lowercase.as_bytes(), true);
+    let complete_spelling = connected_spelling || has_simple_word_shape(lowercase.as_bytes());
     let mut cost = model.spelling_cost(lowercase.as_bytes());
     if has_simple_word_shape(lowercase.as_bytes()) || (keys.len() >= 4 && connected_spelling) {
         cost = cost.min(length * 1.1);
@@ -62,23 +67,56 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     }
     EnglishEvidence {
         cost,
+        identifier: false,
         supports_split: keys.len() >= 3 || capitals || (keys.len() >= 2 && word_hint),
         word_hint,
         prefix_hint,
         capitals,
         connected_spelling,
+        open_spelling,
+        complete_spelling,
     }
 }
 
+/// A pronounceable stem followed by an unregistered consonant initialism is another
+/// English reading. The caller supplies evidence for the competing suffix.
+pub(crate) fn identifier_cost(
+    keys: &str,
+    mut supports_initialism: impl FnMut(&str) -> bool,
+) -> Option<f32> {
+    let model = MODEL.get_or_init(EnglishModel::train);
+    let lowercase = keys.to_ascii_lowercase();
+    let mut best: Option<f32> = None;
+    for suffix_length in 2..=6.min(keys.len().saturating_sub(3)) {
+        let boundary = keys.len() - suffix_length;
+        let suffix = &lowercase.as_bytes()[boundary..];
+        if suffix.iter().any(|key| b"aeiouy".contains(key))
+            || !(model.has_connected_spelling(&lowercase.as_bytes()[..boundary])
+                || has_simple_word_shape(&lowercase.as_bytes()[..boundary]))
+            || !supports_initialism(&keys[boundary..])
+        {
+            continue;
+        }
+        let cost = boundary as f32 * 1.1 + suffix_length as f32 * 1.5 + 1.0;
+        best = Some(best.map_or(cost, |previous| previous.min(cost)));
+    }
+    best
+}
+
 impl EnglishEvidence {
-    pub(crate) fn continues_spelling(&self, keys: &str, boundary: usize) -> bool {
+    pub(crate) fn continues_spelling(
+        &self,
+        keys: &str,
+        boundary: usize,
+        prefix_composes_korean: bool,
+    ) -> bool {
         let lowercase = keys.to_ascii_lowercase();
         // A short prefix can gain word evidence from the next unambiguous
         // English vowel. A consonant-only continuation still needs a stem.
         let adds_vowel = lowercase.as_bytes()[boundary..]
             .iter()
             .any(|key| b"aeiou".contains(key));
-        (self.connected_spelling || adds_vowel)
+        (self.connected_spelling || (!prefix_composes_korean && self.open_spelling) || adds_vowel)
             && MODEL
                 .get_or_init(EnglishModel::train)
                 .has_connected_spelling(lowercase.as_bytes())
@@ -164,12 +202,19 @@ impl EnglishModel {
     }
 
     fn has_connected_spelling(&self, keys: &[u8]) -> bool {
+        self.has_spelling(keys, false)
+    }
+
+    fn has_spelling(&self, keys: &[u8], open: bool) -> bool {
         // Two-letter initialisms do not establish the same continuity as a word.
-        if keys.len() < 3 {
+        if keys.len() < if open { 2 } else { 3 } {
             return false;
         }
         let vowels = vowel_count(keys);
-        if vowels == 0 || vowels * 5 > keys.len() * 3 {
+        if vowels == 0 {
+            return open && is_onset(keys);
+        }
+        if vowels * 5 > keys.len() * 3 {
             return false;
         }
         let mut index = 0;
@@ -188,7 +233,7 @@ impl EnglishModel {
             let cluster = &keys[start..index];
             let supported = if start == 0 {
                 is_onset(cluster)
-            } else if index == keys.len() {
+            } else if index == keys.len() && !open {
                 self.codas.contains(cluster)
             } else {
                 // Compound boundaries can join a coda to another onset. The

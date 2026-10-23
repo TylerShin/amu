@@ -41,3 +41,17 @@ pub const CONNECTED_ENGLISH_WORDS: &[&str] = &[
     "fetch", "scratch", "watch", "patch", "sketch", "dispatch", "packet", "macos", "tacos",
     "nachos", "logos", "solos", "memos", "demos", "radios", "query", "angry",
 ];
+
+// Real and invented identifiers are evaluation inputs, never vocabulary entries.
+pub const IDENTIFIERS: &[&str] = &[
+    "graphql",
+    "GraphQL",
+    "mysql",
+    "MySQL",
+    "postgresql",
+    "PostgreSQL",
+    "florpdb",
+    "vexql",
+    "plintdb",
+    "norgql",
+];

@@ -1,0 +1,128 @@
+# category	expected	intended segments (e: English, k: Korean, i: initials)
+English	graphql	e:graphql
+English	GraphQL	e:GraphQL
+English	mysql	e:mysql
+English	postgresql	e:postgresql
+English	query	e:query
+English	fallback	e:fallback
+English	typescript	e:typescript
+English	javascript	e:javascript
+English	postgres	e:postgres
+English	sqlite	e:sqlite
+English	redis	e:redis
+English	docker	e:docker
+English	kubernetes	e:kubernetes
+English	webpack	e:webpack
+English	vite	e:vite
+English	eslint	e:eslint
+English	prettier	e:prettier
+English	tailwind	e:tailwind
+English	fastapi	e:fastapi
+English	openapi	e:openapi
+English	restapi	e:restapi
+English	grpc	e:grpc
+English	protobuf	e:protobuf
+English	json	e:json
+English	yaml	e:yaml
+English	toml	e:toml
+English	localhost	e:localhost
+English	github	e:github
+English	vercel	e:vercel
+English	supabase	e:supabase
+English	oauth	e:oauth
+English	jwt	e:jwt
+English	react	e:react
+English	reactquery	e:reactquery
+English	gitlab	e:gitlab
+English	wasm	e:wasm
+English	nodejs	e:nodejs
+English	dia	e:dia
+English	nextjs	e:nextjs
+English	ai	e:ai
+English	AI	e:AI
+English	vs	e:vs
+English	florpdb	e:florpdb
+English	vexql	e:vexql
+English	plintdb	e:plintdb
+English	norgql	e:norgql
+English	zenda	e:zenda
+English	florp	e:florp
+Korean	한글	k:gksrmf
+Korean	한국어	k:gksrnrdj
+Korean	안녕하세요	k:dkssudgktpdy
+Korean	어떻게	k:djEjgrp
+Korean	어떨까	k:djEjfRk
+Korean	벌써	k:qjfTj
+Korean	아까	k:dkRk
+Korean	삼성	k:tkatjd
+Korean	소고기	k:thrhrl
+Korean	돼지갈비	k:ehowlrkfql
+Korean	사고싶어	k:tkrhtlvdj
+Korean	싶네요	k:tlvspdy
+Korean	만들었어요	k:aksemfdjTdjdy
+Korean	조합	k:whgkq
+Korean	입력기	k:dlqfurrl
+Korean	초성	k:chtjd
+Korean	설정	k:tjfwjd
+Korean	유지	k:dbwl
+Korean	읽기	k:dlfrrl
+Korean	근본적으로	k:rmsqhswjrdmfh
+Korean	경계에서	k:rudrPdptj
+Korean	테스트	k:xptmxm
+Korean	정상	k:wjdtkd
+Korean	글자	k:rmfwk
+Korean	값	k:rkqt
+Korean	갑사	k:rkqtk
+Korean	읽어	k:dlfrdj
+Korean	닭과	k:ekfrrhk
+Korean	좋아요	k:whgdkdy
+Korean	아니네요	k:dkslspdy
+Korean	데이터	k:epdlxj
+Korean	문장을	k:answkddmf
+Korean	타이핑	k:xkdlvld
+Korean	가각간갇갈감갑갓강나나다라	k:rkrkrrksrkerkfrkarkqrktrkdskskekfk
+Korean	넓다	k:sjfqek
+Korean	괜찮아요	k:rhoscksgdkdy
+Korean	썼어요	k:TjTdjdy
+Korean	됐어요	k:ehoTdjdy
+Korean	왜	k:dho
+Korean	위	k:dnl
+Korean	의	k:dml
+Initials	ㄹㅇ	i:fd
+Initials	ㄱㅅ	i:rt
+Initials	ㅋㅋㅋ	i:zzz
+Initials	ㅎㅎㅎ	i:ggg
+Initials	ㄹㅇㅋㅋ	i:fdzz
+Initials	ㄱㅅㄱㅅ	i:rtrt
+Mixed	ai고	e:ai k:rh
+Mixed	graphql를	e:graphql k:fmf
+Mixed	florpdb에게	e:florpdb k:dprp
+Mixed	vexql부터	e:vexql k:qnxj
+Mixed	fallback에서	e:fallback k:dptj
+Mixed	query가	e:query k:rk
+Mixed	AI한글	e:AI k:gksrmf
+Mixed	io갑사	e:io k:rkqtk
+Mixed	zq고	e:zq k:rh
+Mixed	삼성sdi	k:tkatjd e:sdi
+Mixed	한글AI	k:gksrmf e:AI
+Mixed	설정florp	k:tjfwjd e:florp
+Mixed	기능XRM	k:rlsmd e:XRM
+Mixed	화면NPX	k:ghkaus e:NPX
+Mixed	삼성qzx	k:tkatjd e:qzx
+
+# Additional user report during this change; kept separate from the initial cohort.
+English-short-stem	lock	e:lock
+English-short-stem	clock	e:clock
+English-short-stem	flock	e:flock
+English-short-stem	unlock	e:unlock
+English-short-stem	deadlock	e:deadlock
+English-short-stem	padlock	e:padlock
+English-short-stem	dock	e:dock
+English-short-stem	rock	e:rock
+English-short-stem	sock	e:sock
+English-short-stem	mock	e:mock
+English-short-stem	pick	e:pick
+English-short-stem	kick	e:kick
+English-short-stem	lick	e:lick
+English-short-stem	muck	e:muck
+English-short-stem	tuck	e:tuck
