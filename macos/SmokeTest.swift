@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 
 @main
 @MainActor
@@ -37,12 +38,74 @@ struct SmokeTest {
         verifyConnectedEnglishSpelling(input)
         verifyInitialExpressions(input)
         verifyMarkedTextPresentation()
+        verifySecureInput()
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, explicit composition style, selection replacement, reentrant finish")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, explicit composition style, secure input, selection replacement, reentrant finish")
+    }
+
+    private static func verifySecureInput() {
+        for mode in InputMode.allCases {
+            var secure = false
+            let coordinator = InputCoordinator(mode: mode, secureInputEnabled: { secure })
+            let previous = PresentationClient()
+            _ = coordinator.handle(keyEvent(15, "r"), client: previous)
+            _ = coordinator.handle(keyEvent(40, "k"), client: previous)
+            expect(!coordinator.markedText.isEmpty, "Prepare pending text before entering a password field")
+            let password = PresentationClient()
+            secure = true
+            for (code, text) in [(UInt16(0), "a"), (0, "A"), (51, "\u{7f}"), (49, " "), (36, "\r")] {
+                expect(!coordinator.handle(keyEvent(code, text), client: password), "Secure input must forward each original key")
+            }
+            coordinator.finish(client: password)
+            coordinator.changeMode(.korean, client: password)
+            expect(coordinator.markedText.isEmpty, "Secure input must discard pending text and context")
+            expect(password.lastMarked == nil && password.commits.isEmpty, "No marked, empty replacement or committed text may reach a password field")
+            secure = false
+            coordinator.finish(client: password)
+            expect(password.commits.isEmpty, "Leaving secure input must not flush an old composition")
+            expect(coordinator.mode == mode, "Secure input must preserve the user's normal typing mode")
+            _ = coordinator.handle(keyEvent(0, "a"), client: password)
+            expect(coordinator.markedText == (mode == .korean ? "ㅁ" : "a"), "Normal input must resume with a fresh session")
+        }
+
+        var secure = false
+        let coordinator = InputCoordinator(mode: .korean, secureInputEnabled: { secure })
+        let transition = SecureTransitionClient { secure = true }
+        for _ in 0..<64 { _ = coordinator.handle(keyEvent(15, "r"), client: transition) }
+        transition.secureOnCommit = true
+        expect(!coordinator.handle(keyEvent(40, "k"), client: transition), "A key whose new preedit was suppressed must be forwarded")
+        expect(transition.commits == 1 && transition.marks == 64, "A secure transition during commit must suppress the following preedit")
+        expect(coordinator.markedText.isEmpty, "A secure transition during an edit must discard the remaining state")
+
+        // Exercise the real OS query and NSSecureTextField without showing a
+        // window or reading any user's password. Balance only our own enable.
+        expect(EnableSecureEventInput() == noErr, "Enable the test's secure input scope")
+        defer { DisableSecureEventInput() }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 80), styleMask: [.titled], backing: .buffered, defer: false)
+        let password = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 30))
+        window.contentView!.addSubview(password)
+        password.selectText(nil)
+        guard let editor = password.currentEditor() as? NSTextView else { fatalError("Missing secure field editor") }
+        defer { window.makeFirstResponder(nil) }
+        let systemCoordinator = InputCoordinator(mode: .korean)
+        let client = SecureFieldClient(editor)
+        let keys: [(UInt16, String)] = [(15, "r"), (40, "k"), (0, "A"), (18, "1"), (18, "!")]
+        var expected = ""
+        for (code, text) in keys {
+            expect(!systemCoordinator.handle(keyEvent(code, text), client: client), "The production OS security query must bypass composition")
+            editor.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+            expected += text
+            expect(editor.string == expected && !editor.hasMarkedText(), "The secure field must receive exactly one original character per key")
+        }
+        expect(!systemCoordinator.handle(keyEvent(51, "\u{7f}"), client: client), "Secure Backspace must reach the field")
+        editor.deleteBackward(nil)
+        systemCoordinator.finish(client: client)
+        expect(editor.string == String(expected.dropLast()), "Secure deletion must remove only one original character")
+        expect(client.writes == 0, "The input method must never write into the secure field")
     }
 
     private static func verifyInitialExpressions(_ input: TypingView) {
@@ -83,6 +146,8 @@ struct SmokeTest {
             ("fallback", [(3, "f"), (0, "a"), (37, "l"), (37, "l"), (11, "b"), (0, "a"), (8, "c"), (40, "k")]),
             ("rollback", [(15, "r"), (31, "o"), (37, "l"), (37, "l"), (11, "b"), (0, "a"), (8, "c"), (40, "k")]),
             ("switch", [(1, "s"), (13, "w"), (34, "i"), (17, "t"), (8, "c"), (4, "h")]),
+            ("macos", [(46, "m"), (0, "a"), (8, "c"), (31, "o"), (1, "s")]),
+            ("tacos", [(17, "t"), (0, "a"), (8, "c"), (31, "o"), (1, "s")]),
         ]
         let suffixes: [(String, [(UInt16, String)])] = [
             ("", []), ("가", [(15, "r"), (40, "k")]),
@@ -98,8 +163,8 @@ struct SmokeTest {
                     for key in keys {
                         press(input, [key])
                         partial += key.1
-                        if word == "fallback" {
-                            expect(input.string == before + partial, "fallback must stay Latin at every keystroke")
+                        if ["fallback", "macos", "tacos"].contains(word) {
+                            expect(input.string == before + partial, "\(word) must stay Latin at every keystroke")
                         }
                     }
                     expect(input.string == before + word, "The English word must remain intact before its suffix")
@@ -322,4 +387,35 @@ private final class PresentationClient: CompositionClient {
 
     func mark(_ text: MarkedText) { lastMarked = text }
     func commit(_ text: String) { commits.append(text) }
+}
+
+@MainActor
+private final class SecureTransitionClient: CompositionClient {
+    var marks = 0
+    var commits = 0
+    var secureOnCommit = false
+    private let enterSecureInput: () -> Void
+
+    init(enterSecureInput: @escaping () -> Void) { self.enterSecureInput = enterSecureInput }
+    func mark(_ text: MarkedText) { marks += 1 }
+    func commit(_ text: String) {
+        commits += 1
+        if secureOnCommit { enterSecureInput() }
+    }
+}
+
+@MainActor
+private final class SecureFieldClient: CompositionClient {
+    let editor: NSTextView
+    var writes = 0
+
+    init(_ editor: NSTextView) { self.editor = editor }
+    func mark(_ text: MarkedText) {
+        writes += 1
+        editor.setMarkedText(text.attributedString, selectedRange: text.selectionRange, replacementRange: NSRange(location: NSNotFound, length: 0))
+    }
+    func commit(_ text: String) {
+        writes += 1
+        editor.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+    }
 }

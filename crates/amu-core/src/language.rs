@@ -153,10 +153,9 @@ impl Decoder {
             if !suffix.complete {
                 continue;
             }
-            if prefix.connected_spelling
-                && !prefix.word_hint
+            if !prefix.word_hint
                 && !prefix.capitals
-                && self.continues_english_spelling(keys, boundary, &korean_text)
+                && self.continues_english_spelling(keys, boundary, &korean_text, &prefix)
             {
                 continue;
             }
@@ -189,7 +188,13 @@ impl Decoder {
         }
     }
 
-    fn continues_english_spelling(&mut self, keys: &str, boundary: usize, korean: &str) -> bool {
+    fn continues_english_spelling(
+        &mut self,
+        keys: &str,
+        boundary: usize,
+        korean: &str,
+        prefix: &english::EnglishEvidence,
+    ) -> bool {
         let Some(first_syllable) = korean.chars().next() else {
             return false;
         };
@@ -205,7 +210,7 @@ impl Decoder {
                 return false;
             }
             if first == Some(first_syllable) {
-                return english::has_connected_spelling(&keys[..boundary + index + 1]);
+                return prefix.continues_spelling(&keys[..boundary + index + 1], boundary);
             }
         }
         false

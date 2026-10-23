@@ -1,4 +1,4 @@
-cold session/model initialization: 1.89ms
+cold session/model initialization: 1.79ms
 regression english: 16/16
 regression english-first: 4/4
 regression korean: 52/52
@@ -12,8 +12,8 @@ two-letter capitals without a Korean Shift onset across 5 contexts: 2470/2470
 mixed boundaries across 5 contexts: 450/450
 Korean boundary counterexamples across 5 contexts: 70/70
 English boundary counterexamples across 5 contexts: 70/70
-unregistered connected English spelling across 5 contexts: 80/80
-Korean after connected English spelling across 5 contexts: 720/720
+unregistered connected English spelling across 5 contexts: 120/120
+Korean after connected English spelling across 5 contexts: 1080/1080
 initial expressions with context: 115/115
 initial-expression keys in uppercase: 115/115
 initial-expression Latin counterexamples: 120/120
@@ -68,5 +68,5 @@ held-out Korean FORM tokens (2+ syllables, after 4 Korean words): 8743/8747 pres
   miss: 참여해 → 참여go
   miss: 증가해 → 증가go
 held-out Korean FORM tokens (2+ syllables, neutral): 8747/8747 preserved
-release core fixture keys: n=68500, p50=0.2µs p95=3.9µs p99=5.8µs
-release core 64-key token: n=6400, p50=8.2µs p95=22.7µs p99=197.9µs
+release core fixture keys: n=68500, p50=0.2µs p95=4.1µs p99=6.2µs
+release core 64-key token: n=6400, p50=9.8µs p95=27.2µs p99=238.0µs

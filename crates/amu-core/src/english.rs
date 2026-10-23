@@ -70,11 +70,19 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     }
 }
 
-/// Checks letter continuity without looking up the whole word.
-pub(crate) fn has_connected_spelling(keys: &str) -> bool {
-    MODEL
-        .get_or_init(EnglishModel::train)
-        .has_connected_spelling(keys.to_ascii_lowercase().as_bytes())
+impl EnglishEvidence {
+    pub(crate) fn continues_spelling(&self, keys: &str, boundary: usize) -> bool {
+        let lowercase = keys.to_ascii_lowercase();
+        // A short prefix can gain word evidence from the next unambiguous
+        // English vowel. A consonant-only continuation still needs a stem.
+        let adds_vowel = lowercase.as_bytes()[boundary..]
+            .iter()
+            .any(|key| b"aeiou".contains(key));
+        (self.connected_spelling || adds_vowel)
+            && MODEL
+                .get_or_init(EnglishModel::train)
+                .has_connected_spelling(lowercase.as_bytes())
+    }
 }
 
 fn has_simple_word_shape(keys: &[u8]) -> bool {
