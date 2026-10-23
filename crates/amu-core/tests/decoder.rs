@@ -161,6 +161,43 @@ fn initial_editing_keeps_each_consonant_separate_and_resumes_syllables() {
 }
 
 #[test]
+fn composable_english_is_reconsidered_before_commit_and_survives_editing() {
+    for word in ["query", "queue", "angry"] {
+        assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            let mut korean = Session::new(Mode::Korean).unwrap();
+            for (index, key) in word.bytes().enumerate() {
+                let update = session.process(Input::Letter(key));
+                let composed = korean.process(Input::Letter(key)).preedit;
+                let literal = &word[..=index];
+                assert!(
+                    update.commit.is_empty(),
+                    "{word}: premature commit at {literal}"
+                );
+                // Early keys can mean either language. They must stay editable,
+                // and the complete spelling must resolve without needing Space.
+                assert!(
+                    update.preedit == literal || update.preedit == composed,
+                    "{word}: invalid partial reading {} at {literal}",
+                    update.preedit
+                );
+                if index + 1 == word.len() {
+                    assert_eq!(update.preedit, word, "{context:?}: {word}");
+                }
+            }
+            for length in (0..word.len()).rev() {
+                assert_eq!(session.process(Input::Backspace).preedit, &word[..length]);
+            }
+            assert_eq!(type_keys(&mut session, word), word);
+            assert_eq!(session.process(Input::WordBoundary).commit, word);
+            assert!(session.process(Input::Finish).commit.is_empty());
+            assert_eq!(type_keys(&mut session, "gksrmf"), "한글");
+        }
+    }
+}
+
+#[test]
 fn unregistered_english_spelling_survives_composable_endings() {
     for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
         assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));

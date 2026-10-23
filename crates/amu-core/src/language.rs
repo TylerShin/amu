@@ -196,6 +196,14 @@ impl Decoder {
         let Some(first_syllable) = korean.chars().next() else {
             return false;
         };
+        self.probe.recompose(&keys[..boundary]);
+        let prefix_text = self.probe.text();
+        let prefix_korean = KoreanEvidence::assess(&prefix_text, boundary);
+        // A stem that competes with complete Hangul needs a witnessed letter
+        // junction before absorbing another composable syllable as English.
+        if prefix_korean.complete && !english::supports_transition(keys, boundary) {
+            return false;
+        }
         self.probe.reset();
         // Ask libhangul which prefix produced the first syllable. Once a
         // second character appears, a one-syllable prefix cannot match again.
@@ -218,7 +226,12 @@ impl Decoder {
         self.probe.recompose(keys);
         let text = self.probe.text();
         let korean = KoreanEvidence::assess(&text, keys.len());
-        let has_korean_support = if english.word_hint || english.capitals {
+        let has_korean_support = if english.word_hint
+            || english.capitals
+            || (korean.complete
+                && english.connected_spelling
+                && !crate::korean_statistics::supports_syllables(&text))
+        {
             korean.supports_reading(keys, &text) || korean.repeated_jamo
         } else {
             korean.supports_continuation(keys, &text)

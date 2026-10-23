@@ -85,15 +85,21 @@ impl EnglishEvidence {
     }
 }
 
+pub(crate) fn supports_transition(keys: &str, boundary: usize) -> bool {
+    let left = keys.as_bytes()[boundary - 1].to_ascii_lowercase();
+    let right = keys.as_bytes()[boundary].to_ascii_lowercase();
+    MODEL.get_or_init(EnglishModel::train).transitions[usize::from(left - b'a')]
+        [usize::from(right - b'a')]
+}
+
 fn has_simple_word_shape(keys: &[u8]) -> bool {
     if keys.len() < 4 {
         return false;
     }
-    let mut vowels = 0;
+    let vowels = vowel_count(keys);
     let mut consonant_run = 0;
     for (index, key) in keys.iter().enumerate() {
         if b"aeiouy".contains(key) {
-            vowels += 1;
             consonant_run = 0;
         } else {
             consonant_run += 1;
@@ -113,6 +119,7 @@ struct EnglishModel {
     words: HashSet<&'static str>,
     prefixes: HashSet<&'static str>,
     codas: HashSet<&'static [u8]>,
+    transitions: [[bool; 26]; 26],
 }
 
 impl EnglishModel {
@@ -121,6 +128,7 @@ impl EnglishModel {
         let mut prefixes = HashSet::new();
         let mut codas = HashSet::from([&b""[..]]);
         let mut counts = [[SMOOTHING; ALPHABET_SIZE]; ALPHABET_SIZE];
+        let mut transitions = [[false; 26]; 26];
         for word in &words {
             let coda_start = word
                 .bytes()
@@ -131,6 +139,9 @@ impl EnglishModel {
             for (index, key) in word.bytes().enumerate() {
                 let current = usize::from(key - b'a');
                 counts[previous][current] += 1.0;
+                if previous != WORD_EDGE {
+                    transitions[previous][current] = true;
+                }
                 previous = current;
                 prefixes.insert(&word[..=index]);
             }
@@ -148,6 +159,7 @@ impl EnglishModel {
             words,
             prefixes,
             codas,
+            transitions,
         }
     }
 
@@ -156,7 +168,7 @@ impl EnglishModel {
         if keys.len() < 3 {
             return false;
         }
-        let vowels = keys.iter().filter(|key| b"aeiouy".contains(key)).count();
+        let vowels = vowel_count(keys);
         if vowels == 0 || vowels * 5 > keys.len() * 3 {
             return false;
         }
@@ -208,4 +220,15 @@ fn is_onset(cluster: &[u8]) -> bool {
     cluster.len() <= 1
         || INITIAL_CLUSTERS.contains(&cluster)
         || LONG_INITIAL_CLUSTERS.contains(&cluster)
+}
+
+fn vowel_count(keys: &[u8]) -> usize {
+    // The u in the consonant spelling qu does not form another vowel nucleus.
+    // Keep it as a separator in cluster parsing, but exclude it from density.
+    keys.iter()
+        .enumerate()
+        .filter(|&(index, key)| {
+            b"aeiouy".contains(key) && !(*key == b'u' && index > 0 && keys[index - 1] == b'q')
+        })
+        .count()
 }

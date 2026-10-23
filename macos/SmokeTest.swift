@@ -152,6 +152,8 @@ struct SmokeTest {
             ("switch", [(1, "s"), (13, "w"), (34, "i"), (17, "t"), (8, "c"), (4, "h")]),
             ("macos", [(46, "m"), (0, "a"), (8, "c"), (31, "o"), (1, "s")]),
             ("tacos", [(17, "t"), (0, "a"), (8, "c"), (31, "o"), (1, "s")]),
+            ("query", [(12, "q"), (32, "u"), (14, "e"), (15, "r"), (16, "y")]),
+            ("angry", [(0, "a"), (45, "n"), (5, "g"), (15, "r"), (16, "y")]),
         ]
         let suffixes: [(String, [(UInt16, String)])] = [
             ("", []), ("가", [(15, "r"), (40, "k")]),
@@ -172,6 +174,12 @@ struct SmokeTest {
                         }
                     }
                     expect(input.string == before + word, "The English word must remain intact before its suffix")
+                    if suffix.isEmpty {
+                        press(input, [(51, "\u{7f}")])
+                        expect(input.string == before + String(word.dropLast()), "English deletion must remove one letter")
+                        press(input, [keys.last!])
+                        expect(input.string == before + word, "Retyping must restore the English word")
+                    }
                     press(input, suffixKeys)
                     let expected = before + word + suffix
                     expect(input.string == expected && input.hasMarkedText(), "Connected spelling: \(expected), actual: \(input.string)")

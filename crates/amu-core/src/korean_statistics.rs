@@ -64,9 +64,28 @@ pub(crate) fn contains_observed_syllable(text: &str) -> bool {
     })
 }
 
+/// Back off from an unseen syllable to its initial-vowel and vowel-final pairs.
+/// A small corpus must not reject a regular new syllable solely for being rare.
+/// Unseen open syllables lack the extra coda evidence and remain unsupported.
+pub(crate) fn supports_syllables(text: &str) -> bool {
+    let model = MODEL.get_or_init(SyllableModel::load);
+    text.chars().all(|character| {
+        if !('가'..='힣').contains(&character) {
+            return false;
+        }
+        let syllable = character as usize - 0xac00;
+        model.unigrams[syllable] < UNKNOWN_COST
+            || (!syllable.is_multiple_of(28)
+                && model.initial_vowels[syllable / 28]
+                && model.vowel_finals[syllable % 588])
+    })
+}
+
 struct SyllableModel {
     unigrams: [f32; SYLLABLES],
     bigrams: HashMap<usize, f32>,
+    initial_vowels: [bool; 19 * 21],
+    vowel_finals: [bool; 21 * 28],
 }
 
 impl SyllableModel {
@@ -74,6 +93,8 @@ impl SyllableModel {
         let mut model = Self {
             unigrams: [UNKNOWN_COST; SYLLABLES],
             bigrams: HashMap::new(),
+            initial_vowels: [false; 19 * 21],
+            vowel_finals: [false; 21 * 28],
         };
         for line in DATA.lines().filter(|line| !line.starts_with('#')) {
             let mut fields = line.split('\t');
@@ -89,7 +110,11 @@ impl SyllableModel {
                 .parse()
                 .expect("numeric model cost");
             match kind {
-                "U" => model.unigrams[key] = cost,
+                "U" => {
+                    model.unigrams[key] = cost;
+                    model.initial_vowels[key / 28] = true;
+                    model.vowel_finals[key % 588] = true;
+                }
                 "B" => {
                     model.bigrams.insert(key, cost);
                 }

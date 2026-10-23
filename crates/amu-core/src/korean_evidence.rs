@@ -67,7 +67,9 @@ impl KoreanEvidence {
         let explicit_shift = keys.bytes().any(|key| key.is_ascii_lowercase())
             && keys.bytes().any(|key| b"REQTWOP".contains(&key));
         self.complete
-            && (crate::korean_statistics::contains_observed_syllable(text) || explicit_shift)
+            && ((crate::korean_statistics::contains_observed_syllable(text)
+                && crate::korean_statistics::supports_syllables(text))
+                || explicit_shift)
     }
 
     /// A prefix may end mid-syllable. Completed syllables followed by jamo, or
