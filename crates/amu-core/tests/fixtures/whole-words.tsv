@@ -1,0 +1,38 @@
+# category	expected text	intended segments
+English	goal	e:goal
+English	goals	e:goals
+English	coal	e:coal
+English	coals	e:coals
+English	soap	e:soap
+English	soaps	e:soaps
+English	cheap	e:cheap
+English	lock	e:lock
+English	query	e:query
+English	graphql	e:graphql
+English	macos	e:macos
+English	fallback	e:fallback
+English	ai	e:ai
+English	vs	e:vs
+English	dia	e:dia
+Korean	미래	k:alfo
+Korean	소개해	k:throgo
+Korean	개냐	k:rosi
+Korean	재임	k:wodla
+Korean	걔가	k:rOrk
+Korean	해째	k:goWo
+Korean	태그	k:xorm
+Korean	한글	k:gksrmf
+Korean	촘촘히	k:chachagl
+Korean	돼지갈비	k:ehowlrkfql
+Korean	야생동물의	k:ditodehdanfdml
+Korean	미약한	k:aldirgks
+Korean	핸드	k:gosem
+Korean	새해	k:togo
+Korean	야생	k:ditod
+Initials	ㄹㅇ	i:fd
+Initials	ㄱㅅ	i:rt
+Initials	ㅋㅋㅋ	i:zzz
+Mixed	goal고	e:goal k:rh
+Mixed	goal를	e:goal k:fmf
+Mixed	ai고	e:ai k:rh
+Mixed	graphql를	e:graphql k:fmf

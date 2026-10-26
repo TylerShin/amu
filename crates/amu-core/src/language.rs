@@ -348,6 +348,7 @@ fn whole_candidates(
         has_korean_support && english_evidence.word_hint && !english_evidence.capitals;
     let mut korean_cost =
         korean_evidence.cost + korean_coverage_cost(keys, korean, korean_evidence);
+    korean_cost += korean_word_cost(korean, korean_evidence, english_evidence);
     if korean_evidence.repeated_jamo
         && !use_capitals
         && !korean_initials::has_expression_shape(keys)
@@ -421,6 +422,18 @@ fn korean_coverage_cost(keys: &str, text: &str, korean: &KoreanEvidence) -> f32 
     if korean.complete && !korean.active_syllable_supported && !korean.supports_reading(keys, text)
     {
         UNSUPPORTED_KOREAN_COST
+    } else {
+        0.0
+    }
+}
+
+fn korean_word_cost(
+    text: &str,
+    korean: &KoreanEvidence,
+    english: &english::EnglishEvidence,
+) -> f32 {
+    if korean.complete && english.observed_vowel_sequence {
+        crate::korean_statistics::unconnected_word_cost(text)
     } else {
         0.0
     }

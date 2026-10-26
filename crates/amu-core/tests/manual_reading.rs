@@ -1,6 +1,54 @@
 use amu_core::{DecisionStatus, HangulComposer, Input, Mode, Session};
 
 #[test]
+fn language_toggle_skips_mixed_candidates_and_preserves_the_explicit_choice() {
+    for (keys, shown, korean) in [
+        ("goal", "goal", "해미"),
+        ("dia", "얌", "얌"),
+        ("fd", "ㄹㅇ", "ㄹㅇ"),
+        ("githubdp", "github에", "햐소ㅕㅠ에"),
+    ] {
+        let mut session = Session::new(Mode::Auto).unwrap();
+        assert_eq!(type_keys(&mut session, keys), shown);
+        let english_first = shown != keys;
+        for expected in if english_first {
+            vec![keys, korean, keys]
+        } else {
+            vec![korean, keys]
+        } {
+            let corrected = session.process(Input::ToggleLanguage);
+            assert_eq!(corrected.preedit, expected);
+            assert!(corrected.consumed && corrected.commit.is_empty());
+            assert_eq!(session.interpretation().status, DecisionStatus::Explicit);
+        }
+        assert_eq!(type_keys(&mut session, "x"), format!("{keys}x"));
+        assert_eq!(
+            session.process(Input::WordBoundary).commit,
+            format!("{keys}x")
+        );
+        assert_eq!(type_keys(&mut session, "dkssud"), "안녕");
+    }
+}
+
+#[test]
+fn language_toggle_respects_fixed_modes_and_real_korean_deletion() {
+    for mode in [Mode::Auto, Mode::Korean, Mode::English] {
+        let mut session = Session::new(mode).unwrap();
+        assert!(session.process(Input::ToggleLanguage).preedit.is_empty());
+        let shown = type_keys(&mut session, "rkqtk");
+        if mode != Mode::Auto {
+            assert_eq!(session.process(Input::ToggleLanguage).preedit, shown);
+        } else {
+            assert_eq!(session.process(Input::Backspace).preedit, "갑ㅅ");
+            assert_eq!(session.process(Input::ToggleLanguage).preedit, "갑ㅅ");
+        }
+        session.process(Input::Finish);
+        let empty = session.process(Input::ToggleLanguage);
+        assert!(empty.commit.is_empty() && empty.preedit.is_empty());
+    }
+}
+
+#[test]
 fn an_unfamiliar_name_can_be_corrected_without_a_dictionary_entry() {
     let mut session = Session::new(Mode::Auto).unwrap();
     assert_eq!(type_keys(&mut session, "dia"), "얌");

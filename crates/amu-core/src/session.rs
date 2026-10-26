@@ -25,6 +25,12 @@ pub enum Input {
     Finish,
     WordBoundary,
     CycleReading,
+    ToggleLanguage,
+}
+
+enum ReadingCorrection {
+    NextCandidate,
+    OppositeLanguage,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -81,7 +87,8 @@ impl Session {
             Input::Letter(_) | Input::Finish => self.finish(),
             Input::Backspace => self.backspace(),
             Input::WordBoundary => self.commit_word(),
-            Input::CycleReading => self.cycle_reading(),
+            Input::CycleReading => self.correct_reading(ReadingCorrection::NextCandidate),
+            Input::ToggleLanguage => self.correct_reading(ReadingCorrection::OppositeLanguage),
         }
     }
 
@@ -216,21 +223,33 @@ impl Session {
         self.update(consumed, String::new())
     }
 
-    fn cycle_reading(&mut self) -> Update {
+    fn correct_reading(&mut self, correction: ReadingCorrection) -> Update {
         // After a Korean deletion the original keys no longer describe the
         // displayed syllable boundaries. Keep that edited composition intact.
         if self.mode != Mode::Auto || !self.literal_complete || self.literal.is_empty() {
             return self.update(true, String::new());
         }
         self.korean.recompose(&self.literal);
-        let readings = self
-            .decoder
-            .manual_readings(&self.literal, &self.korean, &self.context);
-        let next = readings
-            .iter()
-            .position(|reading| *reading == self.decision.reading)
-            .map_or(0, |index| (index + 1) % readings.len());
-        self.decision = Decision::fixed(readings[next]);
+        let reading = match correction {
+            ReadingCorrection::OppositeLanguage if self.decision.reading != Reading::English => {
+                Reading::English
+            }
+            ReadingCorrection::OppositeLanguage if korean_initials::can_render(&self.literal) => {
+                Reading::Initials
+            }
+            ReadingCorrection::OppositeLanguage => Reading::Korean,
+            ReadingCorrection::NextCandidate => {
+                let readings =
+                    self.decoder
+                        .manual_readings(&self.literal, &self.korean, &self.context);
+                let next = readings
+                    .iter()
+                    .position(|reading| *reading == self.decision.reading)
+                    .map_or(0, |index| (index + 1) % readings.len());
+                readings[next]
+            }
+        };
+        self.decision = Decision::fixed(reading);
         self.manual = true;
         self.edited = false;
         self.restore_mixed_reading();

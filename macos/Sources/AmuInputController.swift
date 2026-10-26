@@ -38,7 +38,9 @@ final class AmuInputController: IMKInputController {
         if Self.activeController === self { Self.activeController = nil }
     }
 
-    override func recognizedEvents(_ sender: Any!) -> Int { Int(NSEvent.EventTypeMask.keyDown.rawValue) }
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged]).rawValue)
+    }
 
     override func composedString(_ sender: Any!) -> Any! { coordinator.markedText }
 
@@ -61,8 +63,9 @@ final class AmuInputController: IMKInputController {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let help = NSMenuItem(title: "현재 단어 바꾸기: ⌃⇧Space (자동 모드)", action: nil, keyEquivalent: "")
+        let help = NSMenuItem(title: "현재 단어 한/영 전환: 오른쪽 Shift 한 번", action: nil, keyEquivalent: "")
         menu.addItem(help)
+        menu.addItem(NSMenuItem(title: "혼합 후보 포함 순환: ⌃⇧Space", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "입력창을 떠나면 자동 판독으로 돌아갑니다", action: nil, keyEquivalent: ""))
         return menu
     }

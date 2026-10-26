@@ -17,7 +17,7 @@ final class Playground: NSObject, NSWindowDelegate {
         heading.frame = NSRect(x: 28, y: 422, width: 600, height: 30)
         heading.autoresizingMask = [.width, .minYMargin]
         container.addSubview(heading)
-        let note = NSTextField(labelWithString: "⌃⇧Space 현재 단어 교정 · ⌃⇧F1 자동 · ⌃⇧F2 한글 고정 · ⌃⇧F3 영문 고정")
+        let note = NSTextField(labelWithString: "오른쪽 Shift 한 번: 현재 단어 한/영 전환 · ⌃⇧Space: 혼합 후보 포함 순환")
         note.frame = NSRect(x: 28, y: 388, width: 724, height: 24)
         note.textColor = .secondaryLabelColor
         note.autoresizingMask = [.width, .minYMargin]
@@ -74,6 +74,10 @@ final class TypingView: NSTextView, CompositionClient {
 
     override func keyDown(with event: NSEvent) {
         if !coordinator.handle(event, client: self) { super.keyDown(with: event) }
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        if !coordinator.handle(event, client: self) { super.flagsChanged(with: event) }
     }
 
     override func mouseDown(with event: NSEvent) {

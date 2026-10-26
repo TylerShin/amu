@@ -21,6 +21,7 @@ pub(crate) struct EnglishEvidence {
     pub connected_spelling: bool,
     pub open_spelling: bool,
     pub complete_spelling: bool,
+    pub observed_vowel_sequence: bool,
 }
 
 pub(crate) fn initialize() {
@@ -42,6 +43,17 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
     let connected_spelling = model.has_connected_spelling(lowercase.as_bytes());
     let open_spelling = model.has_spelling(lowercase.as_bytes(), true);
     let complete_spelling = connected_spelling || has_simple_word_shape(lowercase.as_bytes());
+    // Alternating consonants and vowels fit both languages easily. Require a
+    // witnessed vowel sequence before using missing Korean junctions as evidence.
+    let observed_vowel_sequence = complete_spelling
+        && (use_capitals || keys == lowercase)
+        && lowercase
+            .as_bytes()
+            .windows(2)
+            .any(|pair| pair.iter().all(|key| b"aeiouy".contains(key)))
+        && lowercase.as_bytes().windows(2).all(|pair| {
+            model.transitions[usize::from(pair[0] - b'a')][usize::from(pair[1] - b'a')]
+        });
     let mut cost = model.spelling_cost(lowercase.as_bytes());
     if has_simple_word_shape(lowercase.as_bytes()) || (keys.len() >= 4 && connected_spelling) {
         cost = cost.min(length * 1.1);
@@ -75,6 +87,7 @@ pub(crate) fn assess(keys: &str, use_capitals: bool) -> EnglishEvidence {
         connected_spelling,
         open_spelling,
         complete_spelling,
+        observed_vowel_sequence,
     }
 }
 

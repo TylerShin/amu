@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import IOKit.hidsystem
 
 @main
 @MainActor
@@ -41,13 +42,15 @@ struct SmokeTest {
         verifyMarkedTextPresentation()
         verifySecureInput()
         verifyManualReadings(input)
+        verifyRightShiftCorrection(input)
+        verifyCorrectionGestureBoundaries()
         verifyModeShortcuts()
 
         let coordinator = InputCoordinator()
         let reentrant = ReentrantClient(coordinator: coordinator)
         expect(coordinator.handle(keyEvent(15, "r"), client: reentrant), "Letter should be consumed")
         expect(reentrant.commits == ["r"], "Reentrant finish must commit exactly once")
-        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, per-key presentation, explicit composition style, secure input, selection replacement, reentrant finish, manual reading correction, mode shortcuts")
+        print("Native smoke passed: marked text, Backspace, repeated commit, 삼성sdi 사고싶어, unregistered qzx, word context, Shift overlap, repeated jamo, Space key, short readings across context, English-first boundaries, connected English spelling, initial expressions, per-key presentation, explicit composition style, secure input, selection replacement, reentrant finish, manual reading correction, right Shift tap, mode shortcuts")
     }
 
     private static func verifyPerKeyPresentation(_ input: TypingView) {
@@ -69,6 +72,98 @@ struct SmokeTest {
             press(input, [(49, " ")])
             expect(input.string == shown + " " && !input.hasMarkedText(), "Space must commit the visible frame once")
         }
+    }
+
+    private static func verifyRightShiftCorrection(_ input: TypingView) {
+        reset(input)
+        input.coordinator.changeMode(.auto, client: input)
+        press(input, [(5, "g"), (31, "o"), (0, "a"), (37, "l")])
+        expect(input.string == "goal", "A complete English word must beat unrelated familiar syllables")
+        input.flagsChanged(with: shiftEvent(pressed: true))
+        expect(input.string == "goal", "Pressing Shift alone must not change the word before release")
+        input.flagsChanged(with: shiftEvent(pressed: false))
+        expect(input.string == "해미" && input.hasMarkedText(), "One tap must select the whole Korean alternative")
+        input.flagsChanged(with: shiftEvent(pressed: true))
+        input.flagsChanged(with: shiftEvent(pressed: false))
+        expect(input.string == "goal" && input.selectedRange().location == 4, "A second tap must return to English in place")
+        press(input, [(49, " "), (2, "d"), (40, "k"), (1, "s"), (1, "s"), (32, "u"), (2, "d")])
+        expect(input.string == "goal 안녕", "The next word must return to automatic selection")
+
+        reset(input)
+        press(input, [(2, "d"), (38, "j")])
+        input.flagsChanged(with: shiftEvent(pressed: true))
+        input.keyDown(with: keyEvent(17, "T", flags: [.shift, NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))]))
+        input.flagsChanged(with: shiftEvent(pressed: false))
+        expect(input.string == "었", "Right Shift used for a tense Korean consonant must not correct on release")
+
+        reset(input)
+        input.flagsChanged(with: shiftEvent(pressed: true))
+        for (code, letter) in [(UInt16(0), "A"), (34, "I")] {
+            input.keyDown(with: keyEvent(code, letter, flags: [.shift, NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))]))
+        }
+        input.flagsChanged(with: shiftEvent(pressed: false))
+        expect(input.string == "AI", "Right Shift used for capitals must not convert AI on release")
+    }
+
+    private static func verifyCorrectionGestureBoundaries() {
+        var secure = false
+        let coordinator = InputCoordinator(secureInputEnabled: { secure })
+        let client = PresentationClient()
+        let down = shiftEvent(pressed: true)
+        let up = shiftEvent(pressed: false)
+        expect(!coordinator.handle(down, client: client) && !coordinator.handle(up, client: client), "An empty tap must pass through")
+
+        for (code, letter) in [(UInt16(2), "d"), (34, "i"), (0, "a")] {
+            _ = coordinator.handle(keyEvent(code, letter), client: client)
+        }
+        for other in [
+            shiftEvent(pressed: true, additional: [.control], code: 59),
+            shiftEvent(pressed: true, additional: [.command], code: 55),
+            shiftEvent(pressed: true, additional: [NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELSHIFTKEYMASK))], code: 56)
+        ] {
+            _ = coordinator.handle(down, client: client)
+            _ = coordinator.handle(other, client: client)
+            expect(!coordinator.handle(up, client: client), "Another modifier must cancel the tap")
+            expect(coordinator.markedText == "얌", "A modifier chord must preserve the word")
+        }
+        let both = shiftEvent(pressed: true, additional: [NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELSHIFTKEYMASK))])
+        _ = coordinator.handle(both, client: client)
+        expect(!coordinator.handle(up, client: client), "Right Shift pressed while left Shift is held is not a solo tap")
+
+        _ = coordinator.handle(down, client: client)
+        coordinator.finish(client: client)
+        expect(!coordinator.handle(up, client: client), "Finishing must cancel an armed tap")
+        expect(client.commits == ["얌"], "A late release must not rewrite committed text")
+
+        _ = coordinator.handle(keyEvent(2, "d"), client: client)
+        _ = coordinator.handle(down, client: client)
+        secure = true
+        let password = PresentationClient()
+        expect(!coordinator.handle(up, client: password), "Secure input must cancel and bypass the gesture")
+        expect(password.lastMarked == nil && password.commits.isEmpty, "No gesture callback may write into a password field")
+        secure = false
+        coordinator.changeMode(.english, client: client)
+        _ = coordinator.handle(keyEvent(2, "d"), client: client)
+        _ = coordinator.handle(down, client: client)
+        expect(!coordinator.handle(up, client: client) && coordinator.markedText == "d", "Fixed mode must ignore the automatic correction gesture")
+
+        coordinator.changeMode(.auto, client: client)
+        for (code, letter) in [(UInt16(2), "d"), (34, "i"), (0, "a")] {
+            _ = coordinator.handle(keyEvent(code, letter), client: client)
+        }
+        client.commits.removeAll()
+        client.onMark = { coordinator.finish(client: client) }
+        _ = coordinator.handle(down, client: client)
+        expect(coordinator.handle(up, client: client), "The correction release must be consumed")
+        expect(client.commits == ["dia"], "Reentrant correction must commit exactly once")
+        client.onMark = nil
+        expect(!coordinator.handle(up, client: client), "A repeated release must not trigger a second correction")
+    }
+
+    private static func shiftEvent(pressed: Bool, additional: NSEvent.ModifierFlags = [], code: UInt16 = 60) -> NSEvent {
+        var flags = additional
+        if pressed { flags.formUnion([.shift, NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))]) }
+        return NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!
     }
 
     private static func verifyManualReadings(_ input: TypingView) {

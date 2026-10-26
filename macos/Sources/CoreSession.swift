@@ -19,7 +19,7 @@ struct CompositionUpdate {
 }
 
 enum CoreOperation {
-    case letter(UInt8), backspace, finish, changeMode(InputMode), wordBoundary, cycleReading
+    case letter(UInt8), backspace, finish, changeMode(InputMode), wordBoundary, cycleReading, toggleLanguage
 
     var abiValues: (kind: UInt32, value: UInt32) {
         switch self {
@@ -29,6 +29,7 @@ enum CoreOperation {
         case .changeMode(let mode): return (3, mode.rawValue)
         case .wordBoundary: return (4, 0)
         case .cycleReading: return (5, 0)
+        case .toggleLanguage: return (6, 0)
         }
     }
 }

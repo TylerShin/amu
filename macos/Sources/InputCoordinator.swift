@@ -14,6 +14,7 @@ final class InputCoordinator {
     private var lastMarked = ""
     private var applying = false
     private var finishRequested = false
+    private var correctionGesture = CorrectionGesture()
     private(set) var mode: InputMode = .auto
     var modeDidChange: ((InputMode) -> Void)?
 
@@ -27,8 +28,15 @@ final class InputCoordinator {
 
     func handle(_ event: NSEvent, client: CompositionClient) -> Bool {
         guard !discardIfSecureInput() else { return false }
-        guard event.type == .keyDown, !applying, let session else { return false }
-        let key = KeyTranslator.translate(event)
+        let correct = correctionGesture.observe(event, canCorrect: !applying && mode == .auto && !lastMarked.isEmpty)
+        guard !applying, let session else { return false }
+        let key: CoreOperation
+        if correct {
+            key = .toggleLanguage
+        } else {
+            guard event.type == .keyDown else { return false }
+            key = KeyTranslator.translate(event)
+        }
         if case .changeMode(let mode) = key {
             return event.isARepeat || changeMode(mode, client: client)
         }
@@ -43,6 +51,7 @@ final class InputCoordinator {
     }
 
     func finish(client: CompositionClient) {
+        correctionGesture.reset()
         guard !discardIfSecureInput() else { return }
         if applying { finishRequested = true; return }
         guard let session else { return }
@@ -52,6 +61,7 @@ final class InputCoordinator {
 
     @discardableResult
     func changeMode(_ mode: InputMode, client: CompositionClient) -> Bool {
+        correctionGesture.reset()
         guard !discardIfSecureInput() else { return false }
         guard !applying, let session else { return false }
         do {
@@ -67,6 +77,7 @@ final class InputCoordinator {
     }
 
     func reset() {
+        correctionGesture.reset()
         session?.reset()
         lastMarked = ""
         finishRequested = false

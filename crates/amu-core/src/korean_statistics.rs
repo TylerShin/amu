@@ -9,6 +9,7 @@ const UNKNOWN_COST: f32 = 12.0;
 const EXPECTED_TRANSITION_COST: f32 = 4.5;
 const STATISTICS_WEIGHT: f32 = 0.75;
 const MAX_ATTACHMENT_COST: f32 = 6.0;
+const STRONG_ATTACHMENT_COST: f32 = 4.5;
 static MODEL: OnceLock<SyllableModel> = OnceLock::new();
 
 pub(crate) fn initialize() {
@@ -48,6 +49,32 @@ pub(crate) fn boundary_cost(text: &str) -> f32 {
     (first_cost
         + (transition_cost / transitions as f32 - EXPECTED_TRANSITION_COST) * STATISTICS_WEIGHT)
         .clamp(-2.0, 4.0)
+}
+
+/// Individual familiar syllables do not establish a word. Preserve an observed
+/// syllable junction, reduplication or a well-supported ending when comparing words.
+pub(crate) fn unconnected_word_cost(text: &str) -> f32 {
+    let model = MODEL.get_or_init(SyllableModel::load);
+    let mut previous = None;
+    let mut count = 0;
+    for character in text.chars() {
+        if !('가'..='힣').contains(&character) {
+            return 0.0;
+        }
+        let current = character as usize - 0xac00;
+        if previous == Some(current)
+            || previous
+                .is_some_and(|left| model.bigrams.contains_key(&(left * SYLLABLES + current)))
+        {
+            return 0.0;
+        }
+        previous = Some(current);
+        count += 1;
+    }
+    if count < 2 || model.attachments[previous.unwrap()] < STRONG_ATTACHMENT_COST {
+        return 0.0;
+    }
+    boundary_cost(text).max(0.0)
 }
 
 /// A bounded score for how rarely a syllable begins a tagged particle or ending.

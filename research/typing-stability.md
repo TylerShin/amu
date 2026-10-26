@@ -101,7 +101,7 @@ mise run core:evaluate
 
 `.local` 출력 디렉터리는 먼저 만든다. dev 비교는 마지막 corpus 파일명을 `dev.conllu`로 바꾼다. trace는 지정한 공개 fixture만 평가하며 실사용 타이핑을 수집하지 않는다. 큰 corpus·전체 trace는 저장소에 넣지 않는다.
 
-수정 전을 재현하려면 **이 변경이 포함된 소스의 별도 복사본**에 [복원 patch](typing-stability-before.patch)를 `git apply research/typing-stability-before.patch`로 적용한다. 이 patch는 production Rust 소스만 이전 snapshot으로 복원하므로 현재 평가 코드·fixture·모델은 동일하게 유지된다. 작업 중인 체크아웃에 적용하지 않는다.
+수정 전을 재현하려면 **`72ae0ba7716e6058e14385fb10a4554e61e3bdf1` 소스의 별도 복사본**에 [복원 patch](typing-stability-before.patch)를 `git apply research/typing-stability-before.patch`로 적용한다. 이 patch는 production Rust 소스만 이전 snapshot으로 복원하므로 현재 평가 코드·fixture·모델은 동일하게 유지된다. 작업 중인 체크아웃에 적용하지 않는다.
 
 `crates/amu-core/src`의 파일을 이름순으로 읽고 저장소 상대 경로 UTF-8 바이트 다음에 파일 바이트를 SHA-256에 누적한 식별값:
 
