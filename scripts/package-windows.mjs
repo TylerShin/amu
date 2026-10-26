@@ -25,6 +25,7 @@ function main() {
   for (const [source, target] of [
     ['windows/Install.ps1', 'Install.ps1'], ['docs/install-windows.md', 'README.md'], ['LICENSE', 'LICENSE'],
     ['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'], ['third_party/libhangul', 'libhangul-source'],
+    ['models/initials', 'initial-model'], ['scripts/train-initial-model.mjs', 'initial-model/train-initial-model.mjs'],
     ['models/korean', 'korean-model'], ['scripts/train-korean-model.mjs', 'korean-model/train-korean-model.mjs'],
     ['docs/libhangul-rebuild-windows.md', 'libhangul-rebuild.md'],
   ]) cpSync(source, resolve(directory, target), { recursive: true });

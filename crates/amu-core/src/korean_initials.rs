@@ -1,7 +1,34 @@
+use crate::{english::EnglishEvidence, initial_statistics};
+
+const PAIR_EVIDENCE_WEIGHT: f32 = 0.75;
+
+/// Shape generates a candidate; corpus evidence determines its cost.
+pub(crate) fn candidate_cost(keys: &str, english: &EnglishEvidence) -> Option<f32> {
+    if !has_expression_shape(keys) {
+        return None;
+    }
+    let open_word_prefix = english.prefix_hint
+        && keys
+            .as_bytes()
+            .last()
+            .is_some_and(|key| b"aeiou".contains(key));
+    // Preserve established spelling evidence instead of treating its consonant
+    // keys as evidence of slang. There is still an explicit competing candidate.
+    let spelling_penalty = if english.word_hint || english.connected_spelling || open_word_prefix {
+        4.0
+    } else {
+        0.0
+    };
+    // Repetition of the same pair is not independent corpus evidence. Do not
+    // multiply confidence by the number of times the user repeated it.
+    let odds = initial_statistics::log_odds(&keys.as_bytes()[..2]);
+    Some(english.cost - odds * PAIR_EVIDENCE_WEIGHT + spelling_penalty)
+}
+
 /// A distinct onset pair, its repetition, or a pair followed by repeated reactions.
 /// Longer arbitrary consonant strings remain ambiguous with Latin initialisms.
 pub(crate) fn has_expression_shape(keys: &str) -> bool {
-    if keys.len() < 2 || !keys.bytes().all(|key| initial(key).is_some()) {
+    if keys.len() < 2 || !can_render(keys) {
         return false;
     }
     let bytes = keys.as_bytes();
@@ -29,6 +56,10 @@ pub(crate) fn render(keys: &str) -> String {
     keys.bytes()
         .map(|key| initial(key).expect("initial reading contains only consonant keys"))
         .collect()
+}
+
+pub(crate) fn can_render(keys: &str) -> bool {
+    keys.bytes().all(|key| initial(key).is_some())
 }
 
 // The unshifted two-set keyboard, not a vocabulary of expressions. Uppercase

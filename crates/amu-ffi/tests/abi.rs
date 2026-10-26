@@ -2,6 +2,36 @@ use amu_ffi::{AmuOutput, amu_session_free, amu_session_new, amu_session_process}
 use std::mem::MaybeUninit;
 
 #[test]
+fn whole_language_toggle_does_not_commit_and_rejects_invalid_values() {
+    let session = amu_session_new(0);
+    let mut output = MaybeUninit::<AmuOutput>::uninit();
+    // SAFETY: this test owns the live handle and disjoint output storage.
+    unsafe {
+        for key in b"goal" {
+            assert_eq!(
+                amu_session_process(session, 0, (*key).into(), output.as_mut_ptr()),
+                0
+            );
+        }
+        assert_eq!(amu_session_process(session, 6, 1, output.as_mut_ptr()), 1);
+        for expected in ["해미", "goal"] {
+            assert_eq!(amu_session_process(session, 6, 0, output.as_mut_ptr()), 0);
+            let shown = output.assume_init_ref();
+            assert_eq!(shown.commit_len, 0);
+            assert_eq!(shown.consumed, 1);
+            assert_eq!(
+                &shown.preedit[..shown.preedit_len as usize],
+                expected.as_bytes()
+            );
+        }
+        assert_eq!(amu_session_process(session, 4, 0, output.as_mut_ptr()), 0);
+        let committed = output.assume_init_ref();
+        assert_eq!(&committed.commit[..committed.commit_len as usize], b"goal");
+        amu_session_free(session);
+    }
+}
+
+#[test]
 fn c_boundary_returns_owned_utf8_with_explicit_lengths() {
     let session = amu_session_new(1);
     assert!(!session.is_null());
@@ -126,4 +156,41 @@ fn invalid_arguments_do_not_consume_pending_composition() {
 fn output_layout_matches_the_public_c_header() {
     assert_eq!(std::mem::size_of::<AmuOutput>(), 2064);
     assert_eq!(std::mem::align_of::<AmuOutput>(), 4);
+}
+
+#[test]
+fn manual_reading_replaces_only_preedit_and_expires_at_a_word_boundary() {
+    let session = amu_session_new(0);
+    let mut output = MaybeUninit::<AmuOutput>::uninit();
+    // SAFETY: this test owns the live handle and disjoint output storage.
+    unsafe {
+        for key in b"dia" {
+            assert_eq!(
+                amu_session_process(session, 0, (*key).into(), output.as_mut_ptr()),
+                0
+            );
+        }
+        assert_eq!(amu_session_process(session, 5, 1, output.as_mut_ptr()), 1);
+        assert_eq!(amu_session_process(session, 5, 0, output.as_mut_ptr()), 0);
+        let corrected = output.assume_init_ref();
+        assert_eq!(corrected.consumed, 1);
+        assert_eq!(corrected.language, 0);
+        assert_eq!(corrected.commit_len, 0);
+        assert_eq!(&corrected.preedit[..corrected.preedit_len as usize], b"dia");
+        assert_eq!(amu_session_process(session, 4, 0, output.as_mut_ptr()), 0);
+        let committed = output.assume_init_ref();
+        assert_eq!(&committed.commit[..committed.commit_len as usize], b"dia");
+        for key in b"gksrmf" {
+            assert_eq!(
+                amu_session_process(session, 0, (*key).into(), output.as_mut_ptr()),
+                0
+            );
+        }
+        let next = output.assume_init_ref();
+        assert_eq!(
+            &next.preedit[..next.preedit_len as usize],
+            "한글".as_bytes()
+        );
+        amu_session_free(session);
+    }
 }

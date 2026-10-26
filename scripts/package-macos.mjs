@@ -46,7 +46,7 @@ function main() {
 
 function verifyBundle(bundle) {
   run('codesign', ['--verify', '--deep', '--strict', bundle]);
-  for (const file of ['Amu-LICENSE.txt', 'THIRD_PARTY_NOTICES.md', 'libhangul-source/COPYING', 'libhangul-rebuild.md', 'korean-model/manifest.json', 'korean-model/train-korean-model.mjs', 'build.json']) {
+  for (const file of ['Amu-LICENSE.txt', 'THIRD_PARTY_NOTICES.md', 'libhangul-source/COPYING', 'libhangul-rebuild.md', 'initial-model/manifest.json', 'initial-model/pairs.tsv', 'initial-model/LICENSE-korean.txt', 'initial-model/LICENSE-english.txt', 'initial-model/train-initial-model.mjs', 'korean-model/manifest.json', 'korean-model/train-korean-model.mjs', 'build.json']) {
     if (!existsSync(resolve(bundle, 'Contents/Resources', file))) throw new Error(`Missing package resource: ${file}`);
   }
 }

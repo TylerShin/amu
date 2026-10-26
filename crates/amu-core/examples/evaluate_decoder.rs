@@ -1,3 +1,7 @@
+#[path = "../tests/support/keyboard.rs"]
+mod keyboard;
+use keyboard::korean_keys;
+
 use amu_core::{Input, Mode, Session};
 use std::{collections::BTreeMap, time::Instant};
 
@@ -50,8 +54,8 @@ fn report_initial_expressions() {
     let mut capitals = 0;
     let mut latin = 0;
     for &(keys, text) in initials::EXPRESSIONS {
-        for (name, context) in CONTEXTS {
-            let expected = if name.contains("English") { keys } else { text };
+        for (_, context) in CONTEXTS {
+            let expected = text;
             expressions += usize::from(decode_after(keys, context) == expected);
             let uppercase = keys.to_ascii_uppercase();
             capitals += usize::from(decode_after(&uppercase, context) == uppercase);
@@ -62,6 +66,16 @@ fn report_initial_expressions() {
             latin += usize::from(decode_after(word, context) == word);
         }
     }
+    let mut unresolved = 0;
+    for &(keys, intended) in initials::UNCERTAIN_EXPRESSIONS {
+        for (_, context) in CONTEXTS {
+            unresolved += usize::from(decode_after(keys, context) == intended);
+        }
+    }
+    println!(
+        "uncertain intended initials (reported, not relabelled): {unresolved}/{}",
+        initials::UNCERTAIN_EXPRESSIONS.len() * CONTEXTS.len()
+    );
     let expression_count = initials::EXPRESSIONS.len() * CONTEXTS.len();
     let latin_count = initials::LATIN_COUNTEREXAMPLES.len() * CONTEXTS.len();
     println!("initial expressions with context: {expressions}/{expression_count}");
@@ -127,12 +141,26 @@ fn report_mixed_boundaries() {
             extended.push((format!("{word}{keys}"), format!("{word}{text}")));
         }
     }
+    let identifiers = mixed_boundaries::IDENTIFIERS
+        .iter()
+        .map(|word| (word.to_string(), word.to_string()))
+        .collect();
+    let identifier_suffixes = mixed_boundaries::IDENTIFIERS
+        .iter()
+        .flat_map(|word| {
+            mixed_boundaries::KOREAN_SUFFIXES
+                .iter()
+                .map(move |(keys, text)| (format!("{word}{keys}"), format!("{word}{text}")))
+        })
+        .collect();
     for (name, cases) in [
         ("mixed boundaries", cases),
         ("Korean boundary counterexamples", korean),
         ("English boundary counterexamples", english),
         ("unregistered connected English spelling", connected),
         ("Korean after connected English spelling", extended),
+        ("unregistered identifiers", identifiers),
+        ("Korean after identifiers", identifier_suffixes),
     ] {
         let mut correct = 0;
         let mut total = 0;
@@ -261,29 +289,6 @@ fn report_korean_corpus(path: &str, snapshot_path: Option<&str>) {
             println!("  miss: {example}");
         }
     }
-}
-
-fn korean_keys(text: &str) -> String {
-    const ONSETS: [&str; 19] = [
-        "r", "R", "s", "e", "E", "f", "a", "q", "Q", "t", "T", "d", "w", "W", "c", "z", "x", "v",
-        "g",
-    ];
-    const VOWELS: [&str; 21] = [
-        "k", "o", "i", "O", "j", "p", "u", "P", "h", "hk", "ho", "hl", "y", "n", "nj", "np", "nl",
-        "b", "m", "ml", "l",
-    ];
-    const CODAS: [&str; 28] = [
-        "", "r", "R", "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq", "ft", "fx", "fv", "fg",
-        "a", "q", "qt", "t", "T", "d", "w", "c", "z", "x", "v", "g",
-    ];
-    let mut keys = String::new();
-    for character in text.chars() {
-        let syllable = character as usize - 0xac00;
-        keys.push_str(ONSETS[syllable / 588]);
-        keys.push_str(VOWELS[syllable % 588 / 28]);
-        keys.push_str(CODAS[syllable % 28]);
-    }
-    keys
 }
 
 fn report_latency() {

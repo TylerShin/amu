@@ -6,7 +6,8 @@ import InputMethodKit
 final class AmuInputController: IMKInputController {
     private static weak var activeController: AmuInputController?
     static var hasMarkedText: Bool { !(activeController?.coordinator.markedText.isEmpty ?? true) }
-    private let coordinator = InputCoordinator(mode: InputPreferences.loadMode())
+    private let coordinator = InputCoordinator()
+    private let modeIndicator = ModeIndicator()
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, let input = sender as? IMKTextInput else { return false }
@@ -22,19 +23,32 @@ final class AmuInputController: IMKInputController {
         Self.activeController = self
         coordinator.reset()
         if let input = sender as? IMKTextInput {
-            coordinator.changeMode(InputPreferences.loadMode(), client: InputMethodClient(input))
+            coordinator.changeMode(.auto, client: InputMethodClient(input))
         }
+        coordinator.modeDidChange = { [weak self] mode in self?.modeIndicator.show(mode) }
         super.activateServer(sender)
     }
 
     override func deactivateServer(_ sender: Any!) {
+        coordinator.modeDidChange = nil
+        modeIndicator.hide()
         commitComposition(sender)
         coordinator.reset()
         super.deactivateServer(sender)
         if Self.activeController === self { Self.activeController = nil }
     }
 
-    override func recognizedEvents(_ sender: Any!) -> Int { Int(NSEvent.EventTypeMask.keyDown.rawValue) }
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged, .leftMouseDown]).rawValue)
+    }
+
+    override func mouseDown(onCharacterIndex index: Int, coordinate point: NSPoint, withModifier flags: Int, continueTracking keepTracking: UnsafeMutablePointer<ObjCBool>!, client sender: Any!) -> Bool {
+        // IMK's default click-to-commit applies only to keyDown-only handlers.
+        // Finish before the host moves its caret, and cancel any pending Shift tap.
+        keepTracking?.pointee = false
+        commitComposition(sender)
+        return false
+    }
 
     override func composedString(_ sender: Any!) -> Any! { coordinator.markedText }
 
@@ -50,11 +64,17 @@ final class AmuInputController: IMKInputController {
     override func menu() -> NSMenu! {
         let menu = NSMenu(title: "Amu")
         for mode in InputMode.allCases {
-            let item = NSMenuItem(title: mode.title, action: #selector(selectMode(_:)), keyEquivalent: "")
+            let shortcut = ["⌃⇧F1", "⌃⇧F2", "⌃⇧F3"][Int(mode.rawValue)]
+            let item = NSMenuItem(title: "\(mode.title) · \(shortcut)", action: #selector(selectMode(_:)), keyEquivalent: "")
             item.tag = Int(mode.rawValue)
             item.state = coordinator.mode == mode ? .on : .off
             menu.addItem(item)
         }
+        menu.addItem(.separator())
+        let help = NSMenuItem(title: "현재 단어 한/영 전환: 오른쪽 Shift 한 번", action: nil, keyEquivalent: "")
+        menu.addItem(help)
+        menu.addItem(NSMenuItem(title: "혼합 후보 포함 순환: ⌃⇧Space", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "입력창을 떠나면 자동 판독으로 돌아갑니다", action: nil, keyEquivalent: ""))
         return menu
     }
 
@@ -62,7 +82,6 @@ final class AmuInputController: IMKInputController {
         let item = (sender as? NSMenuItem) ?? (sender as? [String: Any])?[kIMKCommandMenuItemName] as? NSMenuItem
         guard let item, let mode = InputMode(rawValue: UInt32(item.tag)), let input = client() else { return }
         coordinator.changeMode(mode, client: InputMethodClient(input))
-        InputPreferences.saveMode(mode)
     }
 }
 

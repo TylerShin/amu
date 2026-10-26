@@ -1,4 +1,4 @@
-use amu_core::{HangulComposer, Input, Mode, Session};
+use amu_core::{DecisionStatus, Input, Language, Mode, Session};
 
 #[path = "support/mixed_boundaries.rs"]
 mod mixed_boundaries;
@@ -17,16 +17,11 @@ const CONTEXTS: &[&[&str]] = &[
 ];
 
 #[test]
-fn initial_expressions_compete_with_latin_using_context_and_case() {
+fn intended_initial_expressions_survive_language_context_and_editing() {
     for &(keys, expected) in initials::EXPRESSIONS {
         assert!(!WORD_HINTS.split_ascii_whitespace().any(|word| word == keys));
-        for (context, selected) in [
-            (&[][..], expected),
-            (&["gksrmf"][..], expected),
-            (&["gksrmf"; 4][..], expected),
-            (&["hello"][..], keys),
-            (&["hello"; 4][..], keys),
-        ] {
+        for context in CONTEXTS {
+            let selected = expected;
             let mut session = session_after(context);
             assert_eq!(
                 type_keys(&mut session, keys),
@@ -54,38 +49,71 @@ fn initial_expressions_preserve_latin_counterexamples() {
 }
 
 #[test]
-fn unregistered_initial_pairs_do_not_depend_on_an_expression_list() {
-    let mut composer = HangulComposer::new().unwrap();
-    let consonants: Vec<_> = (b'a'..=b'z')
-        .filter_map(|key| {
-            composer.reset();
-            let text = composer.push(key).preedit;
-            let character = text.chars().next().unwrap();
-            // No vowel in either reading: these pairs cannot be a partial
-            // English syllable. Check every pair, not a slang vocabulary.
-            (('ㄱ'..='ㅎ').contains(&character) && !b"aeiou".contains(&key))
-                .then_some((key, character))
-        })
-        .collect();
-    for &(first_key, first) in &consonants {
-        for &(second_key, second) in &consonants {
-            let keys = String::from_utf8(vec![first_key, second_key]).unwrap();
-            if first == second || WORD_HINTS.split_ascii_whitespace().any(|word| word == keys) {
-                continue;
-            }
-            let mut session = Session::new(Mode::Auto).unwrap();
+fn ambiguous_initials_preserve_literal_without_claiming_to_understand_the_intent() {
+    for &(keys, intended) in initials::UNCERTAIN_EXPRESSIONS {
+        for context in CONTEXTS {
+            let mut session = session_after(context);
             assert_eq!(
-                type_keys(&mut session, &keys),
-                format!("{first}{second}"),
-                "{keys}"
+                type_keys(&mut session, keys),
+                keys,
+                "{context:?}: {intended}"
             );
-            assert_eq!(session.process(Input::Backspace).preedit, first.to_string());
-            assert_eq!(
-                type_keys(&mut session, &keys[1..]),
-                format!("{first}{second}")
-            );
+            let interpretation = session.interpretation();
+            assert_eq!(interpretation.status, DecisionStatus::Ambiguous);
+            assert_eq!(interpretation.alternative, Some(Language::Korean));
+            assert!(interpretation.margin.unwrap().is_finite());
+            assert_eq!(session.process(Input::WordBoundary).commit, keys);
+            assert!(session.process(Input::Finish).commit.is_empty());
         }
     }
+}
+
+#[test]
+fn uncertain_decisions_do_not_reinforce_language_history() {
+    for (count, expected) in [(2, "해"), (4, "go")] {
+        let mut session = session_after(&["gksrmf"; 4]);
+        for _ in 0..count {
+            assert_eq!(type_keys(&mut session, "sg"), "sg");
+            assert_eq!(session.interpretation().status, DecisionStatus::Ambiguous);
+            session.process(Input::WordBoundary);
+        }
+        // Uncertain literal choices age out the prior without adding Latin votes.
+        assert_eq!(type_keys(&mut session, "go"), expected);
+        session.reset();
+        assert_eq!(session.interpretation().alternative, None);
+    }
+}
+
+#[test]
+fn mixed_sentences_are_checked_against_written_intent() {
+    let fixtures = include_str!("fixtures/sentences.tsv");
+    for line in fixtures.lines().filter(|line| !line.starts_with('#')) {
+        let (keys, intended) = line.split_once('\t').unwrap();
+        let mut session = Session::new(Mode::Auto).unwrap();
+        let mut actual = Vec::new();
+        for word in keys.split(' ') {
+            type_keys(&mut session, word);
+            actual.push(session.process(Input::WordBoundary).commit);
+        }
+        assert_eq!(actual.join(" "), intended, "{keys}");
+        assert!(session.process(Input::Finish).commit.is_empty());
+    }
+}
+
+#[test]
+fn latin_initialisms_remain_editable_without_leaking_into_the_next_word() {
+    for context in CONTEXTS {
+        let mut session = session_after(context);
+        assert_eq!(type_keys(&mut session, "vs"), "vs");
+        assert_eq!(session.process(Input::Backspace).preedit, "v");
+        assert_eq!(type_keys(&mut session, "s"), "vs");
+        assert_eq!(session.process(Input::WordBoundary).commit, "vs");
+        assert!(session.process(Input::Finish).commit.is_empty());
+    }
+    let mut session = Session::new(Mode::Auto).unwrap();
+    type_keys(&mut session, "vs");
+    session.process(Input::WordBoundary);
+    assert_eq!(type_keys(&mut session, "vks"), "판");
 }
 
 #[test]
@@ -101,7 +129,7 @@ fn initials_respect_mode_focus_and_bounded_commit() {
         assert_eq!(type_keys(&mut session, "fd"), "fd");
     }
     let mut session = session_after(&["hello"]);
-    assert_eq!(type_keys(&mut session, "fd"), "fd");
+    assert_eq!(type_keys(&mut session, "fd"), "ㄹㅇ");
     session.process(Input::Finish);
     assert_eq!(type_keys(&mut session, "fd"), "ㄹㅇ");
     session.reset();
@@ -133,8 +161,48 @@ fn initial_editing_keeps_each_consonant_separate_and_resumes_syllables() {
 }
 
 #[test]
+fn composable_english_is_reconsidered_before_commit_and_survives_editing() {
+    for word in ["query", "queue", "angry"] {
+        assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));
+        for context in CONTEXTS {
+            let mut session = session_after(context);
+            let mut korean = Session::new(Mode::Korean).unwrap();
+            for (index, key) in word.bytes().enumerate() {
+                let update = session.process(Input::Letter(key));
+                let composed = korean.process(Input::Letter(key)).preedit;
+                let literal = &word[..=index];
+                assert!(
+                    update.commit.is_empty(),
+                    "{word}: premature commit at {literal}"
+                );
+                // Early keys can mean either language. They must stay editable,
+                // and the complete spelling must resolve without needing Space.
+                assert!(
+                    update.preedit == literal || update.preedit == composed,
+                    "{word}: invalid partial reading {} at {literal}",
+                    update.preedit
+                );
+                if index + 1 == word.len() {
+                    assert_eq!(update.preedit, word, "{context:?}: {word}");
+                }
+            }
+            for length in (0..word.len()).rev() {
+                assert_eq!(session.process(Input::Backspace).preedit, &word[..length]);
+            }
+            assert_eq!(type_keys(&mut session, word), word);
+            assert_eq!(session.process(Input::WordBoundary).commit, word);
+            assert!(session.process(Input::Finish).commit.is_empty());
+            assert_eq!(type_keys(&mut session, "gksrmf"), "한글");
+        }
+    }
+}
+
+#[test]
 fn unregistered_english_spelling_survives_composable_endings() {
-    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS
+        .iter()
+        .chain(mixed_boundaries::IDENTIFIERS)
+    {
         assert!(!WORD_HINTS.split_ascii_whitespace().any(|hint| hint == word));
         for context in CONTEXTS {
             let mut session = session_after(context);
@@ -151,8 +219,34 @@ fn unregistered_english_spelling_survives_composable_endings() {
 }
 
 #[test]
+fn identifier_correction_and_korean_suffix_editing_preserve_both_intentions() {
+    let mut session = Session::new(Mode::Auto).unwrap();
+    assert_eq!(type_keys(&mut session, "graphql"), "graphql");
+    assert_eq!(session.process(Input::CycleReading).preedit, "graph비");
+    session.process(Input::Finish);
+    for word in ["graphql", "florpdb"] {
+        let mut session = Session::new(Mode::Auto).unwrap();
+        assert_eq!(type_keys(&mut session, word), word);
+        assert_eq!(type_keys(&mut session, "rkqtk"), format!("{word}갑사"));
+        for remaining in ["갑ㅅ", "갑", ""] {
+            assert_eq!(
+                session.process(Input::Backspace).preedit,
+                format!("{word}{remaining}")
+            );
+        }
+        assert_eq!(session.process(Input::WordBoundary).commit, word);
+        assert_eq!(type_keys(&mut session, "fd"), "ㄹㅇ");
+        session.process(Input::WordBoundary);
+        assert_eq!(type_keys(&mut session, "djEjfRK"), "어떨까");
+    }
+}
+
+#[test]
 fn a_korean_suffix_starts_after_the_complete_english_spelling() {
-    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS {
+    for &word in mixed_boundaries::CONNECTED_ENGLISH_WORDS
+        .iter()
+        .chain(mixed_boundaries::IDENTIFIERS)
+    {
         for &(keys, korean) in mixed_boundaries::KOREAN_SUFFIXES {
             for context in CONTEXTS {
                 let mut session = session_after(context);
@@ -476,6 +570,7 @@ fn mixed_edit_sequences_remain_bounded_and_reset_cleanly() {
             0..=2 => Input::Backspace,
             3 => Input::WordBoundary,
             4 => Input::Finish,
+            5 => Input::CycleReading,
             _ => Input::Letter(b'a' + ((seed >> 32) % 26) as u8),
         };
         let update = session.process(input);

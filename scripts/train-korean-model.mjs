@@ -32,11 +32,21 @@ function countSyllables(source) {
   const unigrams = new Map();
   const bigrams = new Map();
   const outgoing = new Map();
+  const attachments = new Map();
   let tokens = 0;
   for (const line of source.split('\n')) {
     const columns = line.split('\t');
     if (!/^\d+$/.test(columns[0]) || !/^[가-힣]+$/.test(columns[1] ?? '')) continue;
     tokens += 1;
+    const morphemes = columns[2].split('+');
+    const tags = columns[4].split('+');
+    if (morphemes.length === tags.length) {
+      for (let index = 0; index < tags.length; index += 1) {
+        if (!/^[JE]/.test(tags[index]) || !/^[가-힣]/.test(morphemes[index])) continue;
+        const first = morphemes[index].codePointAt(0) - 0xac00;
+        attachments.set(first, (attachments.get(first) ?? 0) + 1);
+      }
+    }
     const syllables = [...columns[1]].map(character => character.codePointAt(0) - 0xac00);
     for (let index = 0; index < syllables.length; index += 1) {
       const current = syllables[index];
@@ -48,10 +58,10 @@ function countSyllables(source) {
       outgoing.set(previous, (outgoing.get(previous) ?? 0) + 1);
     }
   }
-  return { unigrams, bigrams, outgoing, tokens };
+  return { unigrams, bigrams, outgoing, attachments, tokens };
 }
 
-function writeModel({ unigrams, bigrams, outgoing, tokens }) {
+function writeModel({ unigrams, bigrams, outgoing, attachments, tokens }) {
   const total = [...unigrams.values()].reduce((sum, count) => sum + count, 0);
   const unigramProbability = syllable => ((unigrams.get(syllable) ?? 0) + 0.1) / (total + 0.1 * SYLLABLES);
   const rows = ['# Amu Korean syllable statistics; UD Korean GSD train only; CC BY-SA 4.0'];
@@ -64,13 +74,18 @@ function writeModel({ unigrams, bigrams, outgoing, tokens }) {
     const probability = (count + 10 * unigramProbability(current)) / (outgoing.get(previous) + 10);
     rows.push(`B\t${pair}\t${Math.min(12, -Math.log(probability)).toFixed(6)}`);
   }
+  for (const [syllable, count] of [...unigrams].sort(([left], [right]) => left - right)) {
+    const probability = Math.min(1, ((attachments.get(syllable) ?? 0) + 0.5) / (count + 1));
+    rows.push(`A\t${syllable}\t${(-Math.log(probability)).toFixed(6)}`);
+  }
   const data = `${rows.join('\n')}\n`;
   mkdirSync(OUTPUT, { recursive: true });
   writeFileSync(resolve(OUTPUT, 'syllables.tsv'), data);
   writeFileSync(resolve(OUTPUT, 'manifest.json'), `${JSON.stringify({
     source: SOURCE_URL, revision: REVISION, sourceSha256: SOURCE_SHA256,
-    license: 'CC-BY-SA-4.0', transform: 'Hangul-only FORM tokens; smoothed syllable unigrams and bigrams; no Latin terms or word lookup',
+    license: 'CC-BY-SA-4.0', transform: 'Hangul-only FORM tokens; smoothed syllable unigrams and bigrams; first-syllable attachment evidence from aligned J/E morpheme tags; no Latin terms or word lookup',
     tokens, syllables: total, unigramEntries: unigrams.size, bigramEntries: bigrams.size,
+    attachmentEntries: unigrams.size,
     modelSha256: createHash('sha256').update(data).digest('hex'),
   }, null, 2)}\n`);
   console.log(`Generated Korean statistics from ${tokens} tokens: ${unigrams.size} syllables, ${bigrams.size} pairs`);

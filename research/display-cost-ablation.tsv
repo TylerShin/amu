@@ -1,0 +1,9 @@
+dataset	version	category	final	correct frames	relabeled keys	oscillating keys	mean stable key
+english-test	before	English	11431/12060	73077/82329	24350	7152	2.56
+english-test	no-display-cost	English	11351/12060	72617/82329	25991	7730	2.67
+english-dev	before	English	11261/11895	72377/81546	23843	6962	2.56
+english-dev	no-display-cost	English	11184/11895	71898/81546	25620	7592	2.68
+korean-test	before	Korean	28845/28875	187082/219939	55251	10452	2.41
+korean-test	no-display-cost	Korean	28845/28875	187174/219939	55171	10458	2.41
+korean-dev	before	Korean	28833/28875	190642/223392	54346	10074	2.42
+korean-dev	no-display-cost	Korean	28833/28875	190733/223392	54303	10089	2.41

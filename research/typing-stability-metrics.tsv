@@ -1,0 +1,19 @@
+dataset	version	category	final	correct frames	relabeled keys	oscillating keys	mean stable key
+intent	before	English	132/144	802/879	188	57	2.47
+intent	before	English-short-stem	15/45	151/213	70	12	4.53
+intent	before	Initials	18/18	30/54	48	12	2.67
+intent	before	Korean	123/123	685/924	987	359	5.12
+intent	before	Mixed	45/45	276/378	320	124	7.53
+intent	after	English	138/144	819/879	151	47	2.14
+intent	after	English-short-stem	33/45	176/213	47	9	2.60
+intent	after	Initials	18/18	36/54	18	0	2.00
+intent	after	Korean	123/123	790/924	194	30	2.26
+intent	after	Mixed	45/45	291/378	162	45	7.33
+EWT test	before	English	11206/12060	72327/82329	27262	8162	2.82
+EWT test	after	English	11419/12060	73014/82329	24392	7157	2.56
+GSD test	before	Korean	28845/28875	164060/219939	231075	86015	5.40
+GSD test	after	Korean	28845/28875	187106/219939	55047	10407	2.41
+EWT dev	before	English	11053/11895	71691/81546	26768	8004	2.82
+EWT dev	after	English	11240/11895	72293/81546	23903	6976	2.57
+GSD dev	before	Korean	28833/28875	167502/223392	231824	86469	5.44
+GSD dev	after	Korean	28833/28875	190669/223392	54205	10020	2.41

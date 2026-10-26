@@ -10,12 +10,14 @@ fn main() {
                 automatic.process(Input::Letter(key));
                 korean.process(Input::Letter(key));
             }
+            let interpretation = automatic.interpretation();
             let selected = automatic.process(Input::WordBoundary);
             let composed = korean.process(Input::WordBoundary);
             println!(
                 "  {keys}: {:?} → {}; Korean candidate: {}",
                 selected.language, selected.commit, composed.commit
             );
+            println!("    evidence: {interpretation:?}");
         }
     }
 }

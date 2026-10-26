@@ -59,6 +59,8 @@ pub unsafe extern "C" fn amu_session_process(
         1 => Input::Backspace,
         2 => Input::Finish,
         4 => Input::WordBoundary,
+        5 if value == 0 => Input::CycleReading,
+        6 if value == 0 => Input::ToggleLanguage,
         3 => {
             let Some(mode) = parse_mode(value) else {
                 return INVALID_ARGUMENT;

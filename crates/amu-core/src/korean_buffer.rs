@@ -1,4 +1,4 @@
-use crate::{ComposerError, HangulComposer};
+use crate::{ComposerError, HangulComposer, korean_initials};
 
 /// Keeps completed syllables separate from libhangul's still-editable syllable.
 pub(crate) struct KoreanBuffer {
@@ -28,6 +28,16 @@ impl KoreanBuffer {
         composition.consumed || self.settled.pop().is_some()
     }
 
+    /// Keep explicitly selected initials separate; only the last onset is
+    /// still available to combine with the newly entered vowel.
+    pub(crate) fn continue_initials(&mut self, keys: &str) {
+        let onset = keys.len() - 2;
+        self.reset();
+        self.settled = korean_initials::render(&keys[..onset]);
+        self.append(keys.as_bytes()[onset]);
+        self.append(keys.as_bytes()[onset + 1]);
+    }
+
     /// Used to evaluate a new candidate, never to replay a deletion.
     pub(crate) fn recompose(&mut self, keys: &str) {
         self.reset();
@@ -48,5 +58,21 @@ impl KoreanBuffer {
 
     pub(crate) fn byte_len(&self) -> usize {
         self.settled.len() + self.syllable.len()
+    }
+
+    pub(crate) fn pending_onset_prefix(&self) -> Option<&str> {
+        let pending = !self.settled.is_empty()
+            && self.settled.chars().all(|c| ('가'..='힣').contains(&c))
+            && self.syllable.chars().count() == 1
+            && self.syllable.chars().all(|c| ('ㄱ'..='ㅎ').contains(&c));
+        pending.then_some(self.settled.as_str())
+    }
+
+    pub(crate) fn active_syllable(&self) -> &str {
+        &self.syllable
+    }
+
+    pub(crate) fn settled_text(&self) -> &str {
+        &self.settled
     }
 }
