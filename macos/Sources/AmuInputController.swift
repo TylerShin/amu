@@ -39,7 +39,15 @@ final class AmuInputController: IMKInputController {
     }
 
     override func recognizedEvents(_ sender: Any!) -> Int {
-        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged]).rawValue)
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged, .leftMouseDown]).rawValue)
+    }
+
+    override func mouseDown(onCharacterIndex index: Int, coordinate point: NSPoint, withModifier flags: Int, continueTracking keepTracking: UnsafeMutablePointer<ObjCBool>!, client sender: Any!) -> Bool {
+        // IMK's default click-to-commit applies only to keyDown-only handlers.
+        // Finish before the host moves its caret, and cancel any pending Shift tap.
+        keepTracking?.pointee = false
+        commitComposition(sender)
+        return false
     }
 
     override func composedString(_ sender: Any!) -> Any! { coordinator.markedText }

@@ -55,3 +55,26 @@ mise run core:evaluate
 ```
 
 말뭉치 실행은 이전 보고서의 명령을 사용한다. 수정 전 재현은 기준 커밋의 별도 복사본에서 같은 새 fixture를 지정한다. `crates/amu-core/src`의 파일을 이름순으로 읽어 상대 경로 UTF-8 바이트와 파일 바이트를 SHA-256에 누적한 식별값은 수정 전 `2583674c68ade1a2a4556ccf0060f447aab348a8f54a80b59c760a9d3a000ad7`, 수정 후 `a0c5e2d3d01741837c5b7b51fddbc9b80c4cfc38fd25671bfe2af5d2e1451ce0`이다.
+
+## 오른쪽 Shift 후속 수정
+
+사용자가 밑줄이 남은 단어에서도 교정이 동작하지 않는다고 보고했다. 기존 `CorrectionGesture`는 장치별 `NX_DEVICERSHIFTKEYMASK`가 있어야 누름으로 인식했고, 검사 이벤트도 항상 그 비트를 넣었다. 표준 `.shift`와 키 코드 60만 있는 이벤트를 추가하자 기존 코드에서 `얌 → dia` 검사가 실패했다. 누름·뗌은 표준 Shift 변화로, 오른쪽 여부는 키 코드로 판별하도록 수정했다. 장치별 하위 비트는 양쪽 동시 누름을 배제하는 보조 근거로만 사용한다.
+
+장치별 비트 유무, 왼쪽만 누름, 양쪽 Shift를 서로 다른 순서로 놓기, 글자·보조키와 함께 누름, 반복 누름·뗌, 알 수 없는 키 코드, 뒤이은 정상 단독 교정을 검사한다. `flagsChanged`를 받는 입력기는 IMK의 keyDown 전용 기본 마우스 확정 조건을 벗어나므로 클릭 시 확정·대기 제스처 취소도 명시했다. 클릭은 소비하지 않는다.
+
+참고는 Apple의 [modifierFlags](https://developer.apple.com/documentation/appkit/nsevent/modifierflags-swift.property), [keyCode](https://developer.apple.com/documentation/appkit/nsevent/keycode), SDK `IMKInputController.h`의 `recognizedEvents` 계약이다. [Squirrel의 입력 처리](https://github.com/rime/squirrel/blob/master/sources/SquirrelInputController.swift)도 표준 플래그 변화와 키 코드를 구분해 처리한다. 사용자 입력을 기록하거나 글로벌 키 이벤트 훅을 추가하지 않았다.
+
+이 재현은 실제 사용자의 이벤트를 채집한 결과가 아니라, 기존 코드가 지원하지 못한 유효한 이벤트 형식을 합성해 확인한 결과다. AppKit 검사 통과와 실제 외부 앱에서의 해결 확인은 구분한다.
+
+## 표시 비용 제거 실험
+
+완성 결과를 우선한다는 요청에 따라 `3acb4f72166fb37b860167340c6e521d543f9370`의 별도 복사본에서 `DisplayPolicy::revision_cost`만 항상 0을 반환하도록 바꿔 같은 네 말뭉치를 실행했다. 나머지 판독·조합·문맥·모델·평가 코드는 그대로다. 아래는 개발 비교이며 배포한 변경이 아니다. [집계 원본](display-cost-ablation.tsv)을 함께 보관한다.
+
+| 자료 | 현재 최종 정답 | 표시 비용 제거 | 새로 맞음 | 새 오답 |
+|---|---|---|---|---|
+| EWT test | 11,431 / 12,060 | 11,351 / 12,060 | 0 | 80 |
+| EWT dev | 11,261 / 11,895 | 11,184 / 11,895 | 0 | 77 |
+| GSD test | 28,845 / 28,875 | 28,845 / 28,875 | 0 | 0 |
+| GSD dev | 28,833 / 28,875 | 28,833 / 28,875 | 0 | 0 |
+
+기존 표시 비용을 단순히 제거하면 영어 최종 정확도가 낮아져 채택하지 않았다. 이번 후속 수정에서는 Rust 판독을 변경하지 않는다. 앞으로도 최종 정답과 새 회귀를 먼저 보고, 표시 안정성은 보조 지표로 검증한다. 안정적으로 유지된 오답을 개선으로 세지 않는다.

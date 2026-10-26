@@ -28,6 +28,10 @@ final class InputCoordinator {
 
     func handle(_ event: NSEvent, client: CompositionClient) -> Bool {
         guard !discardIfSecureInput() else { return false }
+        if event.type == .leftMouseDown {
+            finish(client: client)
+            return false
+        }
         let correct = correctionGesture.observe(event, canCorrect: !applying && mode == .auto && !lastMarked.isEmpty)
         guard !applying, let session else { return false }
         let key: CoreOperation

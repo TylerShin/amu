@@ -43,6 +43,7 @@ struct SmokeTest {
         verifySecureInput()
         verifyManualReadings(input)
         verifyRightShiftCorrection(input)
+        verifyPortableShiftFlags(input)
         verifyCorrectionGestureBoundaries()
         verifyModeShortcuts()
 
@@ -105,6 +106,39 @@ struct SmokeTest {
         expect(input.string == "AI", "Right Shift used for capitals must not convert AI on release")
     }
 
+    private static func verifyPortableShiftFlags(_ input: TypingView) {
+        reset(input)
+        input.coordinator.changeMode(.auto, client: input)
+        press(input, [(2, "d"), (34, "i"), (0, "a")])
+        // IME transport does not promise the device-dependent low 16 bits.
+        input.flagsChanged(with: shiftEvent(pressed: true, deviceBits: false))
+        expect(input.string == "얌", "Portable Shift press must wait for release")
+        input.flagsChanged(with: shiftEvent(pressed: false, deviceBits: false))
+        expect(input.string == "dia" && input.hasMarkedText(), "Right Shift must correct with only standard modifier flags")
+
+        let rightDown = shiftEvent(pressed: true, deviceBits: false)
+        let rightUp = shiftEvent(pressed: false, deviceBits: false)
+        let leftDown = shiftEvent(pressed: true, code: 56, deviceBits: false)
+        let leftUp = shiftEvent(pressed: false, code: 56, deviceBits: false)
+        for keys in [
+            [leftDown, leftUp],
+            [leftDown, rightDown, rightDown, leftUp],
+            [rightDown, leftDown, leftDown, rightUp],
+            [rightDown, keyEvent(0, "A", flags: [.shift]), rightDown, rightUp],
+            [shiftEvent(pressed: true, additional: [.option], deviceBits: false), rightUp],
+            [shiftEvent(pressed: true, code: 0, deviceBits: false), rightUp]
+        ] {
+            var gesture = CorrectionGesture()
+            for key in keys {
+                expect(!gesture.observe(key, canCorrect: true), "Left, overlapping, repeated, or unknown modifiers must not trigger correction")
+            }
+            expect(!gesture.observe(rightDown, canCorrect: true), "A new tap must wait for release")
+            expect(!gesture.observe(rightDown, canCorrect: true), "A duplicate press must wait for release")
+            expect(gesture.observe(rightUp, canCorrect: true), "A fresh solo tap after a chord must work")
+            expect(!gesture.observe(rightUp, canCorrect: true), "A duplicate release must do nothing")
+        }
+    }
+
     private static func verifyCorrectionGestureBoundaries() {
         var secure = false
         let coordinator = InputCoordinator(secureInputEnabled: { secure })
@@ -137,6 +171,13 @@ struct SmokeTest {
 
         _ = coordinator.handle(keyEvent(2, "d"), client: client)
         _ = coordinator.handle(down, client: client)
+        let click = NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        expect(!coordinator.handle(click, client: client), "Click must pass through after finishing the current word")
+        expect(!coordinator.handle(up, client: client), "Click must cancel an armed Shift tap before the caret moves")
+        expect(client.commits == ["얌", "d"], "Click must commit the visible text once")
+
+        _ = coordinator.handle(keyEvent(2, "d"), client: client)
+        _ = coordinator.handle(down, client: client)
         secure = true
         let password = PresentationClient()
         expect(!coordinator.handle(up, client: password), "Secure input must cancel and bypass the gesture")
@@ -160,9 +201,12 @@ struct SmokeTest {
         expect(!coordinator.handle(up, client: client), "A repeated release must not trigger a second correction")
     }
 
-    private static func shiftEvent(pressed: Bool, additional: NSEvent.ModifierFlags = [], code: UInt16 = 60) -> NSEvent {
+    private static func shiftEvent(pressed: Bool, additional: NSEvent.ModifierFlags = [], code: UInt16 = 60, deviceBits: Bool = true) -> NSEvent {
         var flags = additional
-        if pressed { flags.formUnion([.shift, NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))]) }
+        if pressed {
+            flags.insert(.shift)
+            if deviceBits { flags.insert(NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))) }
+        }
         return NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!
     }
 
